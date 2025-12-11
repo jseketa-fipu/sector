@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Debug Panel</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #050816;
+      color: #e0e6ff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 20px;
+    }
+    #tick {
+      font-family: monospace;
+      font-weight: bold;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #1a2344;
+      text-align: left;
+    }
+    th {
+      background: #090f24;
+    }
+    tr:nth-child(even) td {
+      background: #050b18;
+    }
+    .mono {
+      font-family: monospace;
+    }
+    #status {
+      font-size: 13px;
+      color: #8be9fd;
+      margin-left: 8px;
+    }
+    #history {
+      margin-top: 16px;
+      padding: 0;
+      list-style: none;
+      font-size: 13px;
+      max-height: 220px;
+      overflow-y: auto;
+      background: #050b18;
+      border-radius: 8px;
+      border: 1px solid #1a2344;
+    }
+    #history li {
+      padding: 4px 8px;
+      border-bottom: 1px solid #11172c;
+    }
+    #history li:last-child {
+      border-bottom: none;
+    }
+    #events-panel, #inspect-panel {
+      margin-top: 16px;
+      padding: 12px;
+      background: #050b18;
+      border: 1px solid #1a2344;
+      border-radius: 8px;
+    }
+    #events-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin: 8px 0 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    #events-list li {
+      padding: 2px 0;
+      border-bottom: 1px solid #11172c;
+    }
+    #events-list li:last-child {
+      border-bottom: none;
+    }
+    #inspect-body {
+      max-height: 260px;
+      overflow-y: auto;
+      background: #0a1022;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #1a2344;
+    }
+    #inspect-controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: center;
+    }
+    #inspect-controls input {
+      width: 80px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid #1a2344;
+      background: #0f1730;
+      color: #e0e6ff;
+    }
+    #inspect-controls button, #inspect-controls label {
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h1>AI Debug Panel <span id="status">(connecting...)</span></h1>
+  <div>Current tick: <span id="tick" class="mono">-</span></div>
+
+  <table id="faction-table">
+    <thead>
+      <tr>
+        <th>Faction</th>
+        <th>Systems</th>
+        <th>Avg Stability</th>
+        <th>Battles (W / L)</th>
+        <th>Expansions</th>
+        <th>Confidence</th>
+        <th>War Exhaustion</th>
+        <th>Economy (power / share)</th>
+        <th>Attempts (base / eff)</th>
+        <th>Personality (A / Ex / G / C)</th>
+      </tr>
+    </thead>
+    <tbody id="faction-body">
+      <!-- rows filled by JS -->
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:16px; font-size:16px;">Recent History</h2>
+  <ul id="history"></ul>
+
+  <div id="events-panel">
+    <div style="font-weight:bold; margin-bottom:4px;">Recent Events</div>
+    <ul id="events-list"></ul>
+  </div>
+
+  <div id="inspect-panel">
+    <div style="font-weight:bold; margin-bottom:4px;">System Inspect</div>
+    <div id="inspect-controls">
+      <input type="number" id="inspect-id" placeholder="system id" />
+      <button id="inspect-btn">Inspect</button>
+      <label style="display:flex; align-items:center; gap:4px;">
+        <input type="checkbox" id="inspect-auto" />
+        Auto-refresh
+      </label>
+    </div>
+    <div id="inspect-body">Enter a system id and click Inspect.</div>
+  </div>
+
+  <script>
+    const tickEl = document.getElementById("tick");
+    const statusEl = document.getElementById("status");
+    const bodyEl = document.getElementById("faction-body");
+    const historyEl = document.getElementById("history");
+    const eventsEl = document.getElementById("events-list");
+    const inspectBody = document.getElementById("inspect-body");
+    const inspectIdInput = document.getElementById("inspect-id");
+    const inspectBtn = document.getElementById("inspect-btn");
+    const inspectAuto = document.getElementById("inspect-auto");
+
+    let selectedSystemId = null;
+    let inspecting = false;
+    let lastMsg = null;
+
+    function renderState(ai) {
+      tickEl.textContent = ai.tick ?? "-";
+      const factions = ai.factions || [];
+      bodyEl.innerHTML = "";
+
+      for (const f of factions) {
+        const tr = document.createElement("tr");
+
+        const tdName = document.createElement("td");
+        tdName.textContent = `${f.id} – ${f.name}`;
+        tr.appendChild(tdName);
+
+        const tdSystems = document.createElement("td");
+        tdSystems.textContent = f.systems_owned;
+        tr.appendChild(tdSystems);
+
+        const tdStab = document.createElement("td");
+        tdStab.textContent = (f.avg_stability ?? 0).toFixed(2);
+        tr.appendChild(tdStab);
+
+        const tdBattles = document.createElement("td");
+        tdBattles.textContent = `${f.battles_won} / ${f.battles_lost}`;
+        tr.appendChild(tdBattles);
+
+        const tdExp = document.createElement("td");
+        tdExp.textContent = f.expansions;
+        tr.appendChild(tdExp);
+
+        const tdConf = document.createElement("td");
+        tdConf.textContent = (f.confidence ?? 0).toFixed(2);
+        tr.appendChild(tdConf);
+
+        const tdExhaust = document.createElement("td");
+        tdExhaust.textContent = (f.war_exhaustion ?? 0).toFixed(2);
+        tr.appendChild(tdExhaust);
+
+        const tdEcon = document.createElement("td");
+        const econPower = f.econ_power ?? 0;
+        const econShare = f.econ_share ?? 0;
+        tdEcon.textContent = `${econPower.toFixed(1)} / ${(econShare * 100).toFixed(1)}%`;
+        tr.appendChild(tdEcon);
+
+        const tdAttempts = document.createElement("td");
+        tdAttempts.textContent = `${f.base_attempts} / ${f.effective_attempts}`;
+        tr.appendChild(tdAttempts);
+
+        const p = f.personality || {};
+        const agg = typeof p.aggression === "number" ? p.aggression.toFixed(2) : p.aggression;
+        const ex  = typeof p.expansionism === "number" ? p.expansionism.toFixed(2) : p.expansionism;
+        const g   = typeof p.greed === "number" ? p.greed.toFixed(2) : p.greed;
+        const c   = typeof p.caution === "number" ? p.caution.toFixed(2) : p.caution;
+
+        const tdPers = document.createElement("td");
+        tdPers.textContent = `${agg} / ${ex} / ${g} / ${c}`;
+        tr.appendChild(tdPers);
+
+        bodyEl.appendChild(tr);
+      }
+    }
+
+    function renderHistory(historyTail) {
+      historyEl.innerHTML = "";
+      (historyTail || []).forEach(ev => {
+        const li = document.createElement("li");
+        const tick = ev.tick ?? "?";
+        const kind = ev.kind ?? "";
+        li.textContent = `[t=${tick}] ${kind}: ${ev.text}`;
+        historyEl.appendChild(li);
+      });
+      historyEl.scrollTop = historyEl.scrollHeight;
+    }
+
+    function renderEvents(evts) {
+      eventsEl.innerHTML = "";
+      (evts || []).forEach(line => {
+        const li = document.createElement("li");
+        li.textContent = line;
+        eventsEl.appendChild(li);
+      });
+      eventsEl.scrollTop = eventsEl.scrollHeight;
+    }
+
+    async function inspectSystem(id, silent=false) {
+      if (id === null || id === undefined || Number.isNaN(id)) return;
+      selectedSystemId = id;
+      inspecting = true;
+      if (!silent) inspectBody.textContent = "Loading...";
+      try {
+        const resp = await fetch(`/system/${id}`);
+        if (!resp.ok) {
+          inspectBody.textContent = "Not found.";
+          inspecting = false;
+          return;
+        }
+        const data = await resp.json();
+        const owner = data.owner_name || "Unclaimed";
+        const stats = [
+          `Owner: ${owner}`,
+          `Value: ${data.value}`,
+          `Stability: ${data.stability.toFixed(2)}`,
+          `Unrest: ${data.unrest.toFixed(2)}`,
+          `Heat: ${data.heat.toFixed(2)}`,
+          `Kind: ${data.kind}`,
+        ];
+        if (data.reclaim_cooldown && data.reclaim_cooldown > 0) {
+          stats.push(`Reclaim cooldown: ${data.reclaim_cooldown}`);
+        }
+        const fleets = data.fleets || [];
+        let fleetsText = "None";
+        if (fleets.length) {
+          fleetsText = fleets
+            .map(fl => `${fl.owner} (str ${fl.strength.toFixed(1)})${fl.eta>0 ? ' enroute' : ''}`)
+            .join("; ");
+        }
+        const historyLines = (data.history || []).map(ev => `t=${ev.tick} ${ev.text}`);
+        inspectBody.innerHTML = `
+          <div><strong>System #${data.id}</strong></div>
+          <div>${stats.join(" | ")}</div>
+          <div><strong>Fleets:</strong> ${fleetsText}</div>
+          <div><strong>History:</strong></div>
+          <ul style="margin:4px 0 0 12px; padding:0; list-style:disc; max-height:180px; overflow-y:auto;">
+            ${historyLines.map(h => `<li style="margin:0; padding:0;">${h}</li>`).join("") || "<li>(none)</li>"}
+          </ul>
+        `;
+      } catch (err) {
+        console.error(err);
+        inspectBody.textContent = "Error loading system.";
+      } finally {
+        inspecting = false;
+      }
+    }
+
+    inspectBtn.addEventListener("click", () => {
+      const id = parseInt(inspectIdInput.value, 10);
+      if (!Number.isNaN(id)) inspectSystem(id);
+    });
+    inspectIdInput.addEventListener("keyup", (e) => {
+      if (e.key === "Enter") {
+        const id = parseInt(inspectIdInput.value, 10);
+        if (!Number.isNaN(id)) inspectSystem(id);
+      }
+    });
+
+    function connect() {
+      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+      const wsUrl = `${protocol}://${window.location.host}/ws`;
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        statusEl.textContent = "connected";
+      };
+
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        lastMsg = msg;
+        if (msg.ai_state) renderState(msg.ai_state);
+        if (msg.history_tail) renderHistory(msg.history_tail);
+        if (msg.events) renderEvents(msg.events);
+        // auto-refresh inspect if enabled
+        if (inspectAuto.checked && selectedSystemId !== null && !inspecting) {
+          inspectSystem(selectedSystemId, true);
+        }
+      };
+
+      ws.onclose = () => {
+        statusEl.textContent = "disconnected, reconnecting...";
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = () => {
+        statusEl.textContent = "error";
+        ws.close();
+      };
+    }
+
+    connect();
+  </script>
+</body>
+</html>
