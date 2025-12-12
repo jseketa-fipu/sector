@@ -259,7 +259,7 @@
       inspecting = true;
       if (!silent) inspectBody.textContent = "Loading...";
       try {
-        const resp = await fetch(`http://backend.seketa.it:8000/system/${id}`);
+        const resp = await fetch(`https://backend.seketa.it:8000/system/${id}`);
         if (!resp.ok) {
           inspectBody.textContent = "Not found.";
           inspecting = false;
