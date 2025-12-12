@@ -288,7 +288,7 @@
     }
 
     function connect() {
-      const wsUrl = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`;
+      const wsUrl = "ws://backend.seketa.it:8000/ws";
       const ws = new WebSocket(wsUrl);
       ws.onmessage = (ev) => {
         const data = JSON.parse(ev.data);
