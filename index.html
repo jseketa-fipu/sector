@@ -288,8 +288,8 @@
     }
 
     function connect() {
-      const wsUrl = "ws://backend.seketa.it:8000/ws";
-      const ws = new WebSocket(wsUrl);
+      const wsProto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${wsProto}://backend.seketa.it/ws`);
       ws.onmessage = (ev) => {
         const data = JSON.parse(ev.data);
         if (typeof data.tick_delay_ms === "number") {
