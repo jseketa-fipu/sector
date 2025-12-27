@@ -138,9 +138,15 @@ EOF
 # Apply app manifests
 kubectl apply -k "$REPO_DIR/k8s"
 
-# Patch ingresses for host + TLS.
-kubectl -n sector-sim patch ingress sector-sim-viz --type=merge -p "{\"spec\":{\"tls\":[{\"hosts\":[\"${DOMAIN}\"],\"secretName\":\"sector-seketa-it-tls\"}],\"rules\":[{\"host\":\"${DOMAIN}\"}]}}"
-kubectl -n sector-sim patch ingress sector-sim-api --type=merge -p "{\"spec\":{\"tls\":[{\"hosts\":[\"${DOMAIN}\"],\"secretName\":\"sector-seketa-it-tls\"}],\"rules\":[{\"host\":\"${DOMAIN}\"}]}}"
+# Patch ingress host + TLS without wiping HTTP paths.
+kubectl -n sector-sim patch ingress sector-sim-viz --type=json -p="[
+  {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"${DOMAIN}\"},
+  {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"}
+]"
+kubectl -n sector-sim patch ingress sector-sim-api --type=json -p="[
+  {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"${DOMAIN}\"},
+  {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"}
+]"
 
 cat <<EOF
 
