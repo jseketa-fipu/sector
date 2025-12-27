@@ -70,8 +70,15 @@ for i in {1..30}; do
   fi
 done
 
-# Install NGINX ingress
-kubectl apply -f k8s/ingress-nginx/controller.yaml
+if [ ! -d "$REPO_DIR/.git" ]; then
+  mkdir -p "$REPO_DIR"
+  git clone "$REPO_URL" "$REPO_DIR"
+else
+  git -C "$REPO_DIR" pull --rebase
+fi
+
+# Install NGINX ingress (bundled with the repo).
+kubectl apply -f "$REPO_DIR/k8s/ingress-nginx/controller.yaml"
 
 # Install cert-manager
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
@@ -98,13 +105,6 @@ spec:
           ingress:
             class: nginx
 EOF
-
-if [ ! -d "$REPO_DIR/.git" ]; then
-  mkdir -p "$REPO_DIR"
-  git clone "$REPO_URL" "$REPO_DIR"
-else
-  git -C "$REPO_DIR" pull --rebase
-fi
 
 # Apply app manifests
 kubectl apply -k "$REPO_DIR/k8s"
