@@ -25,3 +25,5 @@ spec:
               value: redis://redis.sector-sim.svc.cluster.local:6379/0
             - name: PYTHONPATH
               value: /app
+            - name: RESET_UNIVERSE_ON_START
+              value: "true"

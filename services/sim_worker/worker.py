@@ -71,7 +71,8 @@ def _load_config() -> WorkerConfig:
         universe_key=os.environ.get("UNIVERSE_KEY", "sector:universe_id"),
         human_factions_key=os.environ.get("HUMAN_FACTIONS_KEY", "sector:human_factions"),
         restart_key=os.environ.get("RESTART_KEY", "sector:restart"),
-        reset_universe_on_start=os.environ.get("RESET_UNIVERSE_ON_START", "").lower()
+        reset_universe_on_start=os.environ.get("RESET_UNIVERSE_ON_START", "true")
+        .lower()
         == "true",
         order_group=os.environ.get("ORDER_GROUP", "sim"),
         order_consumer=os.environ.get("ORDER_CONSUMER", f"sim-{os.getpid()}"),
