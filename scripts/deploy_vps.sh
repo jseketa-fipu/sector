@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
+# Deploy the stack onto a single VPS using k3s + nginx ingress.
+# This script installs prerequisites, installs/validates k3s, builds a local image,
+# loads it into k3s' containerd, and applies the k8s manifests.
 set -euo pipefail
 
+# --- Configuration (can be overridden via environment variables) ---
 REPO_URL="${1:-}"
 DOMAIN="${DOMAIN:-sector.seketa.it}"
 EMAIL="${EMAIL:-you@seketa.it}"
@@ -10,18 +14,22 @@ K3S_VERSION="${K3S_VERSION:-}"
 IMAGE_NAME="${IMAGE_NAME:-distributed-app}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
+STOP_HOST_NGINX="${STOP_HOST_NGINX:-1}"
 
 if [ -z "$REPO_URL" ]; then
+  # First arg is required so we can clone/pull the repo.
   echo "Usage: $0 <git_repo_url>" >&2
   exit 1
 fi
 
 if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+  # k3s install and system package installs require root.
   echo "Please run as root (sudo) so k3s can install." >&2
   exit 1
 fi
 
 install_packages() {
+  # OS-agnostic package install helper (apt/yum/apk).
   local packages=("$@")
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update -y
@@ -37,6 +45,7 @@ install_packages() {
 }
 
 install_docker() {
+  # Best-effort Docker installation across distros.
   if command -v apt-get >/dev/null 2>&1; then
     install_packages docker.io
   elif command -v yum >/dev/null 2>&1; then
@@ -50,19 +59,24 @@ install_docker() {
 }
 
 if ! command -v git >/dev/null 2>&1; then
+  # Git is needed to clone the repo.
   install_packages git
 fi
 if ! command -v curl >/dev/null 2>&1; then
+  # Curl is used for k3s install and external manifests.
   install_packages curl
 fi
 if ! command -v docker >/dev/null 2>&1; then
+  # Docker builds the app image locally.
   install_docker
 fi
 if command -v systemctl >/dev/null 2>&1; then
+  # Ensure Docker is running so we can build images.
   systemctl enable --now docker >/dev/null 2>&1 || true
 fi
 
 if ! command -v kubectl >/dev/null 2>&1; then
+  # Install k3s if kubectl is missing (k3s bundles kubectl).
   echo "Installing k3s (includes kubectl)..."
   if [ -n "$K3S_VERSION" ]; then
     curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$K3S_VERSION" sh -
@@ -74,10 +88,12 @@ fi
 export KUBECONFIG="$KUBECONFIG_PATH"
 
 if ! command -v kubectl >/dev/null 2>&1; then
+  # Sanity check after k3s install.
   echo "kubectl not found after k3s install." >&2
   exit 1
 fi
 
+# --- Wait for the k3s node to be Ready ---
 # Wait for node to be Ready.
 for i in {1..30}; do
   if kubectl get nodes >/dev/null 2>&1; then
@@ -93,12 +109,30 @@ for i in {1..30}; do
 done
 
 if [ ! -d "$REPO_DIR/.git" ]; then
+  # Fresh clone if repo isn't present.
   mkdir -p "$REPO_DIR"
   git clone "$REPO_URL" "$REPO_DIR"
 else
+  # Fast update if repo already exists.
   git -C "$REPO_DIR" pull --rebase
 fi
 
+# --- Host cleanup to free ports 80/443 for k3s servicelb ---
+# Free host ports 80/443 if requested (needed for k3s servicelb).
+if [ "$STOP_HOST_NGINX" = "1" ] && command -v systemctl >/dev/null 2>&1; then
+  systemctl stop nginx >/dev/null 2>&1 || true
+  systemctl disable nginx >/dev/null 2>&1 || true
+fi
+
+# --- Remove Traefik to avoid port conflicts with nginx ingress ---
+# Remove Traefik so nginx ingress can bind 80/443.
+if kubectl -n kube-system get helmchart traefik >/dev/null 2>&1; then
+  kubectl -n kube-system delete helmchart traefik || true
+fi
+kubectl -n kube-system delete svc traefik >/dev/null 2>&1 || true
+kubectl -n kube-system delete deploy traefik >/dev/null 2>&1 || true
+
+# --- Build the app image locally and load into k3s containerd ---
 # Build locally and load into k3s containerd to avoid external registries.
 docker build -t "$IMAGE" "$REPO_DIR"
 tmp_image_tar="$(mktemp)"
@@ -106,17 +140,36 @@ docker save -o "$tmp_image_tar" "$IMAGE"
 k3s ctr images import "$tmp_image_tar"
 rm -f "$tmp_image_tar"
 
+# --- Install the nginx ingress controller shipped with the repo ---
 # Install NGINX ingress (bundled with the repo).
 kubectl apply -f "$REPO_DIR/k8s/ingress-nginx/controller.yaml"
 
+# --- Wait for k3s servicelb to bind 80/443 to the node ---
+# Wait for k3s servicelb to bind the ingress controller.
+for i in {1..30}; do
+  if kubectl -n kube-system get pods \
+    -l svccontroller.k3s.cattle.io/svcname=ingress-nginx-controller \
+    >/dev/null 2>&1; then
+    if kubectl -n kube-system get pods \
+      -l svccontroller.k3s.cattle.io/svcname=ingress-nginx-controller \
+      -o jsonpath='{.items[*].status.phase}' | grep -q "Running"; then
+      break
+    fi
+  fi
+  sleep 2
+done
+
+# --- Install cert-manager for TLS (Let’s Encrypt) ---
 # Install cert-manager
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
 
+# --- Wait for cert-manager to be ready ---
 # Wait for cert-manager deployment
 kubectl rollout status deploy/cert-manager -n cert-manager --timeout=120s
 kubectl rollout status deploy/cert-manager-webhook -n cert-manager --timeout=120s
 kubectl rollout status deploy/cert-manager-cainjector -n cert-manager --timeout=120s
 
+# --- Create a ClusterIssuer for Let's Encrypt ---
 # Create ClusterIssuer
 cat <<EOF | kubectl apply -f -
 apiVersion: cert-manager.io/v1
@@ -135,9 +188,11 @@ spec:
             class: nginx
 EOF
 
+# --- Apply app manifests (Redis, API, workers, ingresses) ---
 # Apply app manifests
 kubectl apply -k "$REPO_DIR/k8s"
 
+# --- Patch ingress host + TLS without wiping HTTP paths ---
 # Patch ingress host + TLS without wiping HTTP paths.
 kubectl -n sector-sim patch ingress sector-sim-viz --type=json -p="[
   {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"${DOMAIN}\"},
