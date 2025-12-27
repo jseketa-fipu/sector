@@ -7,6 +7,9 @@ EMAIL="${EMAIL:-you@seketa.it}"
 KUBECONFIG_PATH="${KUBECONFIG_PATH:-/etc/rancher/k3s/k3s.yaml}"
 REPO_DIR="${REPO_DIR:-/opt/sector-sim}"
 K3S_VERSION="${K3S_VERSION:-}"
+IMAGE_NAME="${IMAGE_NAME:-distributed-app}"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 
 if [ -z "$REPO_URL" ]; then
   echo "Usage: $0 <git_repo_url>" >&2
@@ -33,11 +36,30 @@ install_packages() {
   fi
 }
 
+install_docker() {
+  if command -v apt-get >/dev/null 2>&1; then
+    install_packages docker.io
+  elif command -v yum >/dev/null 2>&1; then
+    install_packages docker
+  elif command -v apk >/dev/null 2>&1; then
+    install_packages docker
+  else
+    echo "No supported package manager found. Install Docker manually." >&2
+    exit 1
+  fi
+}
+
 if ! command -v git >/dev/null 2>&1; then
   install_packages git
 fi
 if ! command -v curl >/dev/null 2>&1; then
   install_packages curl
+fi
+if ! command -v docker >/dev/null 2>&1; then
+  install_docker
+fi
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl enable --now docker >/dev/null 2>&1 || true
 fi
 
 if ! command -v kubectl >/dev/null 2>&1; then
@@ -76,6 +98,13 @@ if [ ! -d "$REPO_DIR/.git" ]; then
 else
   git -C "$REPO_DIR" pull --rebase
 fi
+
+# Build locally and load into k3s containerd to avoid external registries.
+docker build -t "$IMAGE" "$REPO_DIR"
+tmp_image_tar="$(mktemp)"
+docker save -o "$tmp_image_tar" "$IMAGE"
+k3s ctr images import "$tmp_image_tar"
+rm -f "$tmp_image_tar"
 
 # Install NGINX ingress (bundled with the repo).
 kubectl apply -f "$REPO_DIR/k8s/ingress-nginx/controller.yaml"
