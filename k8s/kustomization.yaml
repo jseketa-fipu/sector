@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sector-sim
+resources:
+  - base/namespace.yaml
+  - base/redis.yaml
+  - base/bot-api-secret.yaml
+  - base/api.yaml
+  - base/bot-worker.yaml
+  - base/sim-worker.yaml
+  - base/viz.yaml
+  - base/ingress-api.yaml
+  - base/ingress-viz.yaml
+images:
+  - name: distributed-app
+    newName: distributed-app
+    newTag: latest

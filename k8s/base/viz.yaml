@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: viz
+  namespace: sector-sim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: viz
+  template:
+    metadata:
+      labels:
+        app: viz
+    spec:
+      containers:
+        - name: viz
+          image: distributed-app:latest
+          imagePullPolicy: IfNotPresent
+          command: ["bash", "-c", "python services/viz_worker/main.py"]
+          env:
+            - name: REDIS_URL
+              value: redis://redis.sector-sim.svc.cluster.local:6379/0
+            - name: PYTHONPATH
+              value: /app
+          ports:
+            - containerPort: 9000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: viz
+  namespace: sector-sim
+spec:
+  type: ClusterIP
+  selector:
+    app: viz
+  ports:
+    - port: 9000
+      targetPort: 9000

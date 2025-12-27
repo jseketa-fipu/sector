@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-worker
+  namespace: sector-sim
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: bot-worker
+  template:
+    metadata:
+      labels:
+        app: bot-worker
+    spec:
+      containers:
+        - name: bot-worker
+          image: distributed-app:latest
+          imagePullPolicy: IfNotPresent
+          command: ["bash", "-c", "python services/bot_worker/puppetmaster.py"]
+          env:
+            - name: REDIS_URL
+              value: redis://redis.sector-sim.svc.cluster.local:6379/0
+            - name: PYTHONPATH
+              value: /app
+            - name: BOT_API_URL
+              value: http://api:8000
+            - name: BOT_POLL_INTERVAL
+              value: "0.1"
+            - name: BOT_EVENT_BLOCK_MS
+              value: "100"
+            - name: BOT_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: bot-api
+                  key: BOT_API_TOKEN

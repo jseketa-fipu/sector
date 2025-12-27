@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sector-sim-viz
+  namespace: sector-sim
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: sector.local
+      http:
+        paths:
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: viz
+                port:
+                  number: 9000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: viz
+                port:
+                  number: 9000

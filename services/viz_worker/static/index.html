@@ -1,0 +1,2385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sector Viz (Pixi)</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-0: #070a12;
+      --bg-1: #0c1326;
+      --bg-2: #121a36;
+      --ink: #ecf1ff;
+      --muted: #9aa8d6;
+      --accent: #8be9ff;
+      --accent-2: #ff9bd6;
+      --panel: rgba(7, 10, 22, 0.72);
+      --panel-2: rgba(12, 16, 32, 0.7);
+      --panel-border: rgba(160, 180, 255, 0.22);
+      --glow: rgba(102, 180, 255, 0.35);
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+      --font-sans: "Trebuchet MS", "Lucida Sans Unicode", "Lucida Grande", sans-serif;
+      --font-title: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+      --font-mono: "Consolas", "Menlo", "Monaco", "Liberation Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 10% 10%, #1b2552 0%, #0c1227 35%, #07090f 100%);
+      color: var(--ink);
+      font-family: var(--font-sans);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 80% 20%, rgba(139, 233, 255, 0.15), transparent 45%),
+        radial-gradient(circle at 20% 75%, rgba(255, 155, 214, 0.12), transparent 40%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 36px 36px;
+      opacity: 0.15;
+      pointer-events: none;
+      z-index: 0;
+    }
+    #hud {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      z-index: 5;
+      width: min(360px, 36vw);
+      pointer-events: none;
+    }
+    body.stage-auth #hud .panel:not([data-panel="account"]) {
+      display: none;
+    }
+    .panel {
+      position: relative;
+      background: linear-gradient(140deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      backdrop-filter: blur(8px);
+      padding: 12px 14px;
+      min-width: 200px;
+      box-shadow: var(--shadow);
+      pointer-events: auto;
+      overflow: visible;
+      animation: panelFloat 0.8s ease both;
+    }
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0.6;
+    }
+    .panel[data-panel="status"] { --accent: #7ed0ff; }
+    .panel[data-panel="player"] { --accent: #ff9bd6; }
+    .panel[data-panel="factions"] { --accent: #ffe58b; }
+    .panel[data-panel="account"] { --accent: #a7b8ff; }
+    .panel:nth-child(1) { animation-delay: 0.05s; }
+    .panel:nth-child(2) { animation-delay: 0.12s; }
+    .panel:nth-child(3) { animation-delay: 0.18s; }
+    .panel:nth-child(4) { animation-delay: 0.24s; }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .panel[data-panel="account"] .panel-header {
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(160, 180, 255, 0.16);
+      margin-bottom: 8px;
+    }
+    .panel[data-panel="account"] .panel-body {
+      display: grid;
+      gap: 8px;
+    }
+    .panel[data-panel="account"] .btn {
+      padding: 6px 14px;
+    }
+    .panel[data-panel="account"] #auth-actions {
+      justify-content: flex-start;
+    }
+    .panel-subtitle {
+      font: 12px var(--font-mono);
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .panel-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .panel-toggle {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: 12px var(--font-mono);
+      cursor: pointer;
+      padding: 2px 4px;
+    }
+    .panel.collapsed .panel-body {
+      display: none;
+    }
+    .title {
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-family: var(--font-title);
+      margin-bottom: 6px;
+    }
+    #status {
+      font: 12px var(--font-mono);
+      line-height: 1.5;
+      color: #d9e3ff;
+    }
+    #factions {
+      max-height: 50vh;
+      overflow: auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+    .faction {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .faction .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      flex-shrink: 0;
+    }
+    .faction .label {
+      font: 11px var(--font-mono);
+      color: #e2e9ff;
+      white-space: nowrap;
+    }
+    #notice {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(12, 16, 32, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 14px;
+      padding: 16px 20px;
+      color: #ffd2d2;
+      font: 13px var(--font-mono);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+      z-index: 6;
+      display: block;
+      max-width: 480px;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.98);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    #notice.visible {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    #winner-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6, 10, 20, 0.7);
+      z-index: 8;
+    }
+    #winner-modal.visible { display: flex; }
+    #winner-card {
+      background: linear-gradient(160deg, rgba(22, 30, 56, 0.96), rgba(10, 14, 28, 0.96));
+      border: 1px solid rgba(160, 180, 255, 0.22);
+      border-radius: 16px;
+      padding: 18px 20px;
+      min-width: min(360px, 88vw);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    #winner-card .title {
+      margin-bottom: 8px;
+    }
+    #winner-card .winner-name {
+      font: 16px var(--font-title);
+      color: #fff5c7;
+      margin-bottom: 10px;
+    }
+    #confirm-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6, 10, 20, 0.7);
+      z-index: 9;
+    }
+    #confirm-modal.visible { display: flex; }
+    #confirm-card {
+      background: linear-gradient(160deg, rgba(22, 30, 56, 0.96), rgba(10, 14, 28, 0.96));
+      border: 1px solid rgba(160, 180, 255, 0.22);
+      border-radius: 16px;
+      padding: 18px 20px;
+      min-width: min(360px, 88vw);
+      box-shadow: var(--shadow);
+    }
+    #confirm-card .title {
+      margin-bottom: 8px;
+    }
+    #confirm-card .message {
+      font: 14px var(--font-mono);
+      color: #f0f3ff;
+      margin-bottom: 14px;
+    }
+    #confirm-card .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    #context-menu {
+      position: fixed;
+      min-width: 200px;
+      background: linear-gradient(160deg, rgba(20, 26, 48, 0.98), rgba(10, 14, 28, 0.98));
+      border: 1px solid rgba(160, 180, 255, 0.2);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 10px;
+      z-index: 7;
+      display: none;
+      backdrop-filter: blur(8px);
+    }
+    #context-menu.visible { display: block; }
+    #context-menu .context-title {
+      font: 11px var(--font-mono);
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    #context-menu .context-item {
+      width: 100%;
+      text-align: left;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(18, 24, 44, 0.9);
+      color: #eef2ff;
+      font: 12px var(--font-mono);
+      cursor: pointer;
+    }
+    #context-menu .context-item:hover {
+      border-color: rgba(139, 233, 255, 0.6);
+      box-shadow: 0 0 10px rgba(139, 233, 255, 0.18);
+    }
+    #context-menu .context-item:disabled {
+      opacity: 0.5;
+      cursor: default;
+      box-shadow: none;
+    }
+    .mono { font: 12px var(--font-mono); color: #cfd7ff; }
+    .muted { color: var(--muted); font-size: 11px; }
+    .row { display: flex; align-items: center; gap: 6px; }
+    .stack { display: grid; gap: 6px; }
+    .btn {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: linear-gradient(160deg, rgba(36, 46, 78, 0.8), rgba(18, 24, 44, 0.9));
+      color: #f1f4ff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font: 12px var(--font-mono);
+      cursor: pointer;
+      transition: transform 0.12s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .btn:hover {
+      border-color: rgba(139, 233, 255, 0.6);
+      box-shadow: 0 0 12px rgba(139, 233, 255, 0.25);
+      transform: translateY(-1px);
+    }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+      box-shadow: none;
+    }
+    .btn.toggle-active {
+      border-color: rgba(157, 255, 179, 0.8);
+      box-shadow: 0 0 14px rgba(157, 255, 179, 0.35);
+      color: #e8ffef;
+    }
+    .select, .input {
+      background: rgba(10, 14, 28, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #e2e9ff;
+      border-radius: 8px;
+      padding: 6px 8px;
+      font: 12px var(--font-mono);
+      flex: 1;
+    }
+    canvas { display: block; touch-action: none; }
+    @keyframes panelFloat {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (max-width: 900px) {
+      #hud {
+        width: auto;
+        left: 10px;
+        right: 10px;
+      }
+      #notice {
+        max-width: 90vw;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div class="panel" data-panel="account">
+      <div class="panel-header">
+        <div class="title">Account</div>
+        <button class="panel-toggle" type="button">Collapse</button>
+      </div>
+      <div class="panel-body">
+        <div id="auth-status">Not signed in.</div>
+        <div class="mono" id="map-seed">Seed: —</div>
+        <div class="row" style="margin-top: 6px;">
+          <input class="input" id="seed-input" type="text" placeholder="Seed (optional)" />
+          <button class="btn" id="seed-apply" type="button">Set Seed</button>
+        </div>
+        <div class="row" id="auth-actions" style="margin-top: 8px;">
+          <button class="btn" id="sign-in">Sign In</button>
+          <button class="btn" id="start-sim" disabled>Start</button>
+          <button class="btn" id="restart-sim">New Map</button>
+          <button class="btn" id="logout" type="button">Logout</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel" data-panel="status">
+      <div class="panel-header">
+        <div class="title">Status</div>
+        <div class="panel-controls">
+          <button class="btn" id="toggle-panels" type="button">Collapse All</button>
+          <button class="panel-toggle" type="button">Collapse</button>
+        </div>
+      </div>
+      <div class="panel-body" id="status">
+        Tick: —<br />
+        FPS: —<br />
+        Systems: —<br />
+        Mode: live<br />
+        Hover: —
+      </div>
+      <div class="panel-body">
+        <div id="status-player" class="mono">Faction: —</div>
+        <div class="row">
+          <button class="btn" id="restart-sim-status" type="button">New Map</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel" data-panel="factions">
+      <div class="panel-header">
+        <div class="title">Factions</div>
+        <button class="panel-toggle" type="button">Collapse</button>
+      </div>
+      <div class="panel-body">
+        <div id="factions"></div>
+      </div>
+    </div>
+  </div>
+  <div id="notice"></div>
+  <div id="winner-modal" role="dialog" aria-modal="true" aria-live="polite">
+    <div id="winner-card">
+      <div class="title">Run Complete</div>
+      <div class="winner-name" id="winner-name">Winner: —</div>
+      <button class="btn" id="winner-close" type="button">Continue</button>
+    </div>
+  </div>
+  <div id="confirm-modal" role="dialog" aria-modal="true">
+    <div id="confirm-card">
+      <div class="title">New Map</div>
+      <div class="message">Create a new map? You will need to claim a faction again.</div>
+      <div class="actions">
+        <button class="btn primary" id="confirm-ok" type="button">OK</button>
+        <button class="btn" id="confirm-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <div id="context-menu">
+    <div class="context-title" id="context-menu-title">System</div>
+    <button class="context-item" id="context-rally" type="button">Rally all idle fleets</button>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js-legacy@7.x/dist/pixi-legacy.min.js"></script>
+  <script>
+    (function() {
+    'use strict';
+
+    const statusEl = document.getElementById("status");
+    const factionsEl = document.getElementById("factions");
+    const noticeEl = document.getElementById("notice");
+    const playerStatusEl = document.getElementById("auth-status");
+    const mapSeedEl = document.getElementById("map-seed");
+    const seedInputEl = document.getElementById("seed-input");
+    const seedApplyBtn = document.getElementById("seed-apply");
+    const winnerModalEl = document.getElementById("winner-modal");
+    const winnerNameEl = document.getElementById("winner-name");
+    const winnerCloseBtn = document.getElementById("winner-close");
+    const confirmModalEl = document.getElementById("confirm-modal");
+    const confirmOkBtn = document.getElementById("confirm-ok");
+    const confirmCancelBtn = document.getElementById("confirm-cancel");
+    const signInBtn = document.getElementById("sign-in");
+    const restartBtn = document.getElementById("restart-sim");
+    const startBtn = document.getElementById("start-sim");
+    const togglePanelsBtn = document.getElementById("toggle-panels");
+    const logoutBtn = document.getElementById("logout");
+    const statusPlayerEl = document.getElementById("status-player");
+    const restartStatusBtn = document.getElementById("restart-sim-status");
+    const contextMenuEl = document.getElementById("context-menu");
+    const contextMenuTitleEl = document.getElementById("context-menu-title");
+    const contextRallyBtn = document.getElementById("context-rally");
+    let contextMenuSystemId = null;
+
+    document.querySelectorAll(".panel").forEach(panel => {
+      const btn = panel.querySelector(".panel-toggle");
+      if (!btn) return;
+      const key = panel.dataset.panel || "";
+      const saved = key ? localStorage.getItem(`viz.panel.${key}`) : null;
+      if (saved === "collapsed") {
+        panel.classList.add("collapsed");
+        btn.textContent = "Expand";
+      }
+      if (key === "status" && togglePanelsBtn) {
+        const anyOpen = Array.from(document.querySelectorAll(".panel"))
+          .some(p => !p.classList.contains("collapsed"));
+        togglePanelsBtn.textContent = anyOpen ? "Collapse All" : "Expand All";
+      }
+      btn.addEventListener("click", () => {
+        panel.classList.toggle("collapsed");
+        const collapsed = panel.classList.contains("collapsed");
+        btn.textContent = collapsed ? "Expand" : "Collapse";
+        if (key) localStorage.setItem(`viz.panel.${key}`, collapsed ? "collapsed" : "open");
+      });
+    });
+
+    if (togglePanelsBtn) {
+      togglePanelsBtn.addEventListener("click", () => {
+        const panels = Array.from(document.querySelectorAll(".panel"));
+        const anyOpen = panels.some(p => !p.classList.contains("collapsed"));
+        const action = anyOpen ? "collapsed" : "open";
+        panels.forEach(panel => {
+          panel.classList.toggle("collapsed", action === "collapsed");
+          const btn = panel.querySelector(".panel-toggle");
+          if (btn) btn.textContent = action === "collapsed" ? "Expand" : "Collapse";
+          const key = panel.dataset.panel || "";
+          if (key) localStorage.setItem(`viz.panel.${key}`, action === "collapsed" ? "collapsed" : "open");
+        });
+        togglePanelsBtn.textContent = action === "collapsed" ? "Expand All" : "Collapse All";
+      });
+    }
+
+    if (restartBtn) {
+      restartBtn.addEventListener("click", async () => {
+        if (!authToken) {
+          showNotice("Sign in to restart the simulation.");
+          return;
+        }
+        if (!await confirmNewMap()) return;
+        const restartSeed = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+        apiFetch(`/admin/restart?seed=${encodeURIComponent(restartSeed)}`, { method: "POST" })
+          .then(() => {
+            refreshPlayer().then(refreshFactions).catch(() => {});
+            showNotice("New map requested.");
+            setTimeout(hideNotice, 1500);
+            if (mapSeedEl) mapSeedEl.textContent = `Seed: ${restartSeed}`;
+            if (seedInputEl) seedInputEl.value = restartSeed;
+          })
+          .catch(err => showNotice(err.message));
+      });
+    }
+    if (restartStatusBtn) {
+      restartStatusBtn.addEventListener("click", async () => {
+        if (!authToken) {
+          showNotice("Sign in to restart the simulation.");
+          return;
+        }
+        if (!await confirmNewMap()) return;
+        const restartSeed = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+        apiFetch(`/admin/restart?seed=${encodeURIComponent(restartSeed)}`, { method: "POST" })
+          .then(() => {
+            refreshPlayer().then(refreshFactions).catch(() => {});
+            showNotice("New map requested.");
+            setTimeout(hideNotice, 1500);
+            if (mapSeedEl) mapSeedEl.textContent = `Seed: ${restartSeed}`;
+            if (seedInputEl) seedInputEl.value = restartSeed;
+          })
+          .catch(err => showNotice(err.message));
+      });
+    }
+
+    if (startBtn) {
+      startBtn.addEventListener("click", () => {
+        if (!selectedFactionId) {
+          showNotice("Click a faction to select it.");
+          return;
+        }
+        claimFaction(selectedFactionId).catch(err => showNotice(err.message));
+      });
+    }
+
+    function applySeed(seed) {
+      const nextSeed = (seed || "").trim();
+      return apiFetch(`/admin/restart${nextSeed ? `?seed=${encodeURIComponent(nextSeed)}` : ""}`, { method: "POST" })
+        .then(() => {
+          showNotice(nextSeed ? `New map seeded: ${nextSeed}` : "New map requested.");
+          setTimeout(hideNotice, 1500);
+          if (mapSeedEl) {
+            mapSeedEl.textContent = nextSeed ? `Seed: ${nextSeed}` : "Seed: live";
+          }
+          if (seedInputEl) {
+            seedInputEl.value = nextSeed;
+            seedInputDirty = false;
+          }
+        })
+        .catch(err => showNotice(err.message));
+    }
+
+    function confirmNewMap() {
+      if (!confirmModalEl) {
+        return Promise.resolve(true);
+      }
+      return new Promise((resolve) => {
+        const cleanup = () => {
+          confirmOkBtn?.removeEventListener("click", onOk);
+          confirmCancelBtn?.removeEventListener("click", onCancel);
+          confirmModalEl?.removeEventListener("click", onBackdrop);
+        };
+        const onOk = () => {
+          cleanup();
+          confirmModalEl.classList.remove("visible");
+          resolve(true);
+        };
+        const onCancel = () => {
+          cleanup();
+          confirmModalEl.classList.remove("visible");
+          resolve(false);
+        };
+        const onBackdrop = (ev) => {
+          if (ev.target === confirmModalEl) onCancel();
+        };
+        confirmOkBtn?.addEventListener("click", onOk);
+        confirmCancelBtn?.addEventListener("click", onCancel);
+        confirmModalEl?.addEventListener("click", onBackdrop);
+        confirmModalEl.classList.add("visible");
+      });
+    }
+
+    if (seedApplyBtn && seedInputEl) {
+      seedApplyBtn.addEventListener("click", async () => {
+        if (!authToken) {
+          showNotice("Sign in to set a seed.");
+          return;
+        }
+        if (!await confirmNewMap()) return;
+        applySeed(seedInputEl.value);
+      });
+    }
+
+    function showWinner(payload) {
+      if (!winnerModalEl || !winnerNameEl) return;
+      const label = payload?.winner_label || payload?.winner;
+      if (!label || String(label).toLowerCase() === "none") {
+        return;
+      }
+      winnerNameEl.textContent = `Winner: ${label}`;
+      winnerModalEl.classList.add("visible");
+    }
+
+    function hideWinner() {
+      if (!winnerModalEl) return;
+      winnerModalEl.classList.remove("visible");
+    }
+
+    if (winnerCloseBtn) {
+      winnerCloseBtn.addEventListener("click", hideWinner);
+    }
+    if (winnerModalEl) {
+      winnerModalEl.addEventListener("click", (ev) => {
+        if (ev.target === winnerModalEl) hideWinner();
+      });
+    }
+
+    const FALLBACK_COLORS = ["#8ef", "#f89", "#9f8", "#f8d35a", "#7cf", "#f7a", "#cfc", "#ffa07a", "#b38bff", "#ff9f7f"];
+    const gradientTextures = new Map();
+    let previewGradientTexture = null;
+
+    const params = new URLSearchParams(window.location.search);
+    const tokenStorageKey = "sector.jwt";
+    let authToken = localStorage.getItem(tokenStorageKey) || "";
+    let playerAddress = null;
+    let playerFaction = null;
+    let universeId = null;
+    let selectedOriginId = null;
+    let selectedTargetId = null;
+    let previewTargetId = null;
+    let neighborsById = new Map();
+    let idleStrengthBySystem = new Map();
+    let idleFleetIdsBySystem = new Map();
+    let hoverSystemId = null;
+    let hoverInfoText = "—";
+    let panning = false;
+    let panStart = null;
+    let panOrigin = null;
+    let lastPointerDownAt = 0;
+    let seedInputDirty = false;
+    const MIN_ZOOM = 0.6;
+    const MAX_ZOOM = 3.5;
+    const camera = { scale: 1, x: 0, y: 0 };
+    let uiStage = "auth";
+    let previewFactionId = null;
+    let selectedFactionId = null;
+    let openFactions = new Set();
+    let lastKnownTick = null;
+    if (mapSeedEl) {
+      mapSeedEl.textContent = "Seed: live";
+    }
+    if (seedInputEl) {
+      seedInputEl.value = "";
+      seedInputEl.addEventListener("input", () => {
+        seedInputDirty = true;
+      });
+    }
+
+    const basePathHint = "/";
+    const apiParam = params.get("api");
+    let basePath = basePathHint;
+    let apiBase = apiParam || `${window.location.origin}/api`;
+    let snapshotPath = `${basePath}snapshot`;
+    let previewPath = `${basePath}preview`;
+    let wsUrl = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}${basePath}ws`;
+    let basePathFallbackTried = false;
+
+    function applyBasePath(path) {
+      basePath = path;
+      snapshotPath = `${basePath}snapshot`;
+      previewPath = `${basePath}preview`;
+      wsUrl = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}${basePath}ws`;
+      apiBase = apiParam || `${window.location.origin}/api`;
+    }
+
+    function showNotice(msg) {
+      noticeEl.textContent = msg;
+      noticeEl.classList.add("visible");
+    }
+    function hideNotice() { noticeEl.classList.remove("visible"); }
+
+    function setPlayerStatus(text) {
+      playerStatusEl.innerHTML = String(text).replace(/\n/g, "<br />");
+    }
+
+    function setStatusPlayer(text) {
+      if (!statusPlayerEl) return;
+      statusPlayerEl.textContent = text;
+    }
+
+    function updateAuthStatus() {
+      const walletValue = playerAddress ? playerAddress : "—";
+      const walletShort = playerAddress
+        ? `${playerAddress.slice(0, 6)}…${playerAddress.slice(-4)}`
+        : "—";
+      const factionLabel = (id) => lastFactionNames[id] || id;
+      const factionValue = playerFaction
+        ? `${factionLabel(playerFaction)}`
+        : (selectedFactionId ? `${factionLabel(selectedFactionId)}` : "—");
+      const hint = playerFaction ? "" : "<br /><span class=\"muted\">Hover to preview, click to select, then press Start.</span>";
+      setPlayerStatus(
+        `Wallet: <span title="${walletValue}">${walletShort}</span>` +
+        `<br />Faction: ${factionValue}` +
+        `${hint}`
+      );
+    }
+
+    function setLogoutVisible(visible) {
+      if (!logoutBtn) return;
+      logoutBtn.style.display = visible ? "" : "none";
+    }
+
+    function setPreviewFaction(id) {
+      previewFactionId = id || null;
+      if (lastFrame) render(lastFrame);
+      updateAuthControls();
+    }
+
+    function setSelectedFaction(id) {
+      if (playerFaction) return;
+      selectedFactionId = id || null;
+      updateAuthStatus();
+      updateAuthControls();
+    }
+
+    function updateAuthControls() {
+      const signedIn = !!authToken;
+      if (restartBtn) restartBtn.disabled = !signedIn;
+      if (startBtn) {
+        const canStart = signedIn && !playerFaction && selectedFactionId && openFactions.has(selectedFactionId);
+        startBtn.disabled = !canStart;
+      }
+    }
+
+    function setUiStage(stage) {
+      uiStage = stage;
+      document.body.classList.toggle("stage-auth", stage === "auth");
+      document.body.classList.toggle("stage-game", stage === "game");
+    }
+
+    function handleUniverseReset() {
+      selectedOriginId = null;
+      selectedTargetId = null;
+      previewTargetId = null;
+      playerFaction = null;
+      setPreviewFaction(null);
+      setSelectedFaction(null);
+      setStatusPlayer("Faction: —");
+      setUiStage("auth");
+      setLogoutVisible(!!authToken);
+      updateAuthControls();
+      lastFactionsSignature = null;
+      refreshPlayer().catch(() => {}).then(() => refreshFactions().catch(() => {}));
+    }
+
+    function clamp(val, min, max) {
+      return Math.max(min, Math.min(max, val));
+    }
+
+    function setCamera(x, y, scale) {
+      camera.scale = clamp(scale, MIN_ZOOM, MAX_ZOOM);
+      camera.x = x;
+      camera.y = y;
+      root.scale.set(camera.scale);
+      root.position.set(camera.x, camera.y);
+    }
+
+    function getCameraCenter() {
+      const w = app.renderer.width;
+      const h = app.renderer.height;
+      return {
+        x: (w / 2 - root.position.x) / camera.scale,
+        y: (h / 2 - root.position.y) / camera.scale,
+      };
+    }
+
+    function screenToWorld(x, y) {
+      const point = new PIXI.Point(x, y);
+      return root.toLocal(point);
+    }
+
+    function centerOnPoint(x, y) {
+      const w = app.renderer.width;
+      const h = app.renderer.height;
+      setCamera(w / 2 - x * camera.scale, h / 2 - y * camera.scale, camera.scale);
+    }
+
+    async function apiFetch(path, options = {}) {
+      const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+      if (authToken) headers.Authorization = `Bearer ${authToken}`;
+      const res = await fetch(`${apiBase}${path}`, { ...options, headers });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = data.detail || res.statusText || "request failed";
+        throw new Error(detail);
+      }
+      return data;
+    }
+
+    async function connectWallet() {
+      if (!window.ethereum) {
+        showNotice("MetaMask not detected.");
+        return;
+      }
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      playerAddress = accounts && accounts[0] ? accounts[0] : null;
+      if (!playerAddress) {
+        showNotice("No wallet account available.");
+        return;
+      }
+      setPlayerStatus(`Wallet: ${playerAddress}`);
+    }
+
+    async function signIn() {
+      if (!playerAddress) {
+        await connectWallet();
+        if (!playerAddress) return;
+      }
+      const nonce = await apiFetch("/auth/nonce", {
+        method: "POST",
+        body: JSON.stringify({ address: playerAddress }),
+      });
+      const message = nonce.message;
+      const signature = await window.ethereum.request({
+        method: "personal_sign",
+        params: [message, playerAddress],
+      });
+      const verified = await apiFetch("/auth/verify", {
+        method: "POST",
+        body: JSON.stringify({ address: playerAddress, signature }),
+      });
+      authToken = verified.token || "";
+      if (authToken) localStorage.setItem(tokenStorageKey, authToken);
+      await refreshPlayer();
+      await refreshFactions();
+      hideNotice();
+    }
+
+    async function refreshPlayer() {
+      if (!authToken) {
+        setPlayerStatus("Not signed in.");
+        playerFaction = null;
+        setUiStage("auth");
+        setStatusPlayer("Faction: —");
+        setLogoutVisible(false);
+        updateAuthControls();
+        setSelectedFaction(null);
+        return;
+      }
+      let me;
+      try {
+        me = await apiFetch("/me");
+      } catch (err) {
+        authToken = "";
+        localStorage.removeItem(tokenStorageKey);
+        setPlayerStatus("Not signed in.");
+        playerFaction = null;
+        setUiStage("auth");
+        setStatusPlayer("Faction: —");
+        setLogoutVisible(false);
+        updateAuthControls();
+        setSelectedFaction(null);
+        return;
+      }
+      playerAddress = me.address || playerAddress;
+      playerFaction = me.faction || null;
+      universeId = me.universe_id || null;
+      updateAuthStatus();
+      const label = playerFaction ? (lastFactionNames[playerFaction] || playerFaction) : "—";
+      setStatusPlayer(`Faction: ${label}`);
+      setLogoutVisible(true);
+      updateAuthControls();
+      setUiStage(playerFaction ? "game" : "auth");
+    }
+
+    async function refreshFactions() {
+      const data = await apiFetch("/factions");
+      const factions = data.factions || [];
+      openFactions = new Set(factions.filter(f => !f.claimed).map(f => f.id));
+      if (selectedFactionId && !openFactions.has(selectedFactionId)) {
+        setSelectedFaction(null);
+      }
+      updateAuthControls();
+    }
+
+    async function claimFaction(factionId) {
+      if (!authToken) {
+        showNotice("Sign in first.");
+        return;
+      }
+      const faction = factionId || "";
+      if (!faction) return;
+      await apiFetch("/factions/claim", {
+        method: "POST",
+        body: JSON.stringify({ faction }),
+      });
+      setPreviewFaction(null);
+      await refreshPlayer();
+      await refreshFactions();
+    }
+
+    let app;
+    let usingCanvas = false;
+    try {
+      const canWebGL = !!(PIXI.utils && PIXI.utils.isWebGLSupported && PIXI.utils.isWebGLSupported());
+      usingCanvas = !canWebGL;
+      app = new PIXI.Application({
+        resizeTo: window,
+        backgroundAlpha: 0,
+        antialias: true,
+        powerPreference: "high-performance",
+        forceCanvas: !canWebGL,
+      });
+    } catch (err) {
+      showNotice("WebGL unavailable and canvas renderer failed to initialize.");
+      return;
+    }
+    if (usingCanvas) {
+      showNotice("WebGL unsupported; using canvas renderer.");
+    }
+    document.body.appendChild(app.view);
+
+    const root = new PIXI.Container();
+    app.stage.addChild(root);
+
+    const starLayer = new PIXI.Graphics();
+    const territoryLayer = new PIXI.Container();
+    const laneLayer = new PIXI.Graphics();
+    const hullMask = new PIXI.Graphics();
+    const hullOutline = new PIXI.Graphics();
+    const previewTerritoryLayer = new PIXI.Graphics();
+    const previewGradientLayer = new PIXI.Graphics();
+    const previewGlowLayer = new PIXI.Graphics();
+    const previewLayer = new PIXI.Graphics();
+    const systemLayer = new PIXI.Container();
+    const siegeLayer = new PIXI.Graphics();
+    const selectionLayer = new PIXI.Graphics();
+    const fleetLayer = new PIXI.Container();
+
+    root.addChild(starLayer);
+    root.addChild(territoryLayer);
+    root.addChild(previewTerritoryLayer);
+    root.addChild(previewGradientLayer);
+    root.addChild(previewGlowLayer);
+    root.addChild(laneLayer);
+    root.addChild(hullMask);
+    root.addChild(hullOutline);
+    root.addChild(previewLayer);
+    root.addChild(systemLayer);
+    root.addChild(siegeLayer);
+    root.addChild(selectionLayer);
+    root.addChild(fleetLayer);
+
+    hullMask.alpha = 0.001;
+    territoryLayer.mask = hullMask;
+    previewTerritoryLayer.mask = hullMask;
+    previewGradientLayer.mask = hullMask;
+    previewGlowLayer.mask = hullMask;
+
+    setCamera(0, 0, 1);
+
+    const MIN_FULL_RENDER_MS = 50;
+    const MIN_PULSE_RENDER_MS = 50;
+    let lastFrame = null;
+    let lastRenderTs = 0;
+    let lastPulseTs = 0;
+    let renderScheduled = false;
+    let tickDelayMs = 0;
+    let lastProj = {};
+    let lastVoronoiCells = null;
+    let lastFactionColors = {};
+    let lastFactionNames = {};
+    let staticDirty = true;
+    let globalSiegePulse = 0;
+    let lastFactionsSignature = null;
+    let frameCounter = 0;
+
+    function clipPolygonToHalfPlane(poly, midx, midy, nx, ny) {
+      // Keep points on the side closer to the site (dot <= 0)
+      const isInside = (pt) => ((pt.x - midx) * nx + (pt.y - midy) * ny) <= 0;
+      const out = [];
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i];
+        const b = poly[(i + 1) % poly.length];
+        const aIn = isInside(a);
+        const bIn = isInside(b);
+        if (aIn && bIn) {
+          out.push(b);
+          continue;
+        }
+        if (aIn && !bIn) {
+          const denom = nx * (b.x - a.x) + ny * (b.y - a.y);
+          if (Math.abs(denom) > 1e-6) {
+            const t = (nx * (midx - a.x) + ny * (midy - a.y)) / denom;
+            if (t >= 0 && t <= 1) out.push({ x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) });
+          }
+        } else if (!aIn && bIn) {
+          const denom = nx * (b.x - a.x) + ny * (b.y - a.y);
+          if (Math.abs(denom) > 1e-6) {
+            const t = (nx * (midx - a.x) + ny * (midy - a.y)) / denom;
+            if (t >= 0 && t <= 1) out.push({ x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) });
+          }
+          out.push(b);
+        }
+      }
+      return out;
+    }
+
+    function computeVoronoi(points, bounds) {
+      const baseRect = [
+        { x: bounds.minX, y: bounds.minY },
+        { x: bounds.maxX, y: bounds.minY },
+        { x: bounds.maxX, y: bounds.maxY },
+        { x: bounds.minX, y: bounds.maxY },
+      ];
+      const cells = new Map();
+      points.forEach((p) => {
+        let poly = baseRect.slice();
+        for (let i = 0; i < points.length; i++) {
+          const q = points[i];
+          if (q === p) continue;
+          const midx = 0.5 * (p.x + q.x);
+          const midy = 0.5 * (p.y + q.y);
+          const nx = q.x - p.x;
+          const ny = q.y - p.y;
+          poly = clipPolygonToHalfPlane(poly, midx, midy, nx, ny);
+          if (poly.length === 0) break;
+        }
+        cells.set(p.id, poly);
+      });
+      return cells;
+    }
+
+    function chaikinSmooth(points, iterations = 2) {
+      let pts = points.slice();
+      for (let i = 0; i < iterations; i++) {
+        const next = [];
+        for (let j = 0; j < pts.length; j++) {
+          const a = pts[j];
+          const b = pts[(j + 1) % pts.length];
+          next.push({ x: 0.75 * a.x + 0.25 * b.x, y: 0.75 * a.y + 0.25 * b.y });
+          next.push({ x: 0.25 * a.x + 0.75 * b.x, y: 0.25 * a.y + 0.75 * b.y });
+        }
+        pts = next;
+      }
+      return pts;
+    }
+
+    function colorToHex(col) {
+      if (!col) return 0xffffff;
+      if (col.startsWith("#")) return parseInt(col.slice(1), 16);
+      return 0xffffff;
+    }
+
+    function lightenColor(hex, amount) {
+      const c = typeof hex === "number" ? hex : colorToHex(hex);
+      const r = Math.min(255, ((c >> 16) & 0xff) + amount);
+      const g = Math.min(255, ((c >> 8) & 0xff) + amount);
+      const b = Math.min(255, (c & 0xff) + amount);
+      return (r << 16) | (g << 8) | b;
+    }
+
+    function hexToRgbaString(hex, alpha) {
+      const c = typeof hex === "number" ? hex : colorToHex(hex);
+      const r = (c >> 16) & 0xff;
+      const g = (c >> 8) & 0xff;
+      const b = c & 0xff;
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    function getGradientTexture(col) {
+      const key = col;
+      if (gradientTextures.has(key)) return gradientTextures.get(key);
+      const size = 256;
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      const grd = ctx.createRadialGradient(size / 2, size / 2, size * 0.12, size / 2, size / 2, size * 0.5);
+      grd.addColorStop(0.0, hexToRgbaString(col, 0.32));
+      grd.addColorStop(0.45, hexToRgbaString(col, 0.18));
+      grd.addColorStop(1.0, hexToRgbaString(col, 0.0));
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, size, size);
+      const tex = PIXI.Texture.from(canvas);
+      gradientTextures.set(key, tex);
+      return tex;
+    }
+
+    function getPreviewGradientTexture() {
+      if (previewGradientTexture) return previewGradientTexture;
+      const size = 512;
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      const grd = ctx.createLinearGradient(0, 0, size, 0);
+      grd.addColorStop(0.0, "rgba(255,255,255,0)");
+      grd.addColorStop(0.35, "rgba(255,255,255,0)");
+      grd.addColorStop(0.5, "rgba(255,255,255,1)");
+      grd.addColorStop(0.65, "rgba(255,255,255,0)");
+      grd.addColorStop(1.0, "rgba(255,255,255,0)");
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, size, size);
+      const tex = PIXI.Texture.from(canvas);
+      tex.baseTexture.wrapMode = PIXI.WRAP_MODES.REPEAT;
+      previewGradientTexture = tex;
+      return tex;
+    }
+
+    function generateStarfield() {
+      starLayer.clear();
+      const w = app.renderer.width;
+      const h = app.renderer.height;
+      const area = w * h;
+      const count = Math.min(450, Math.max(120, Math.floor(area / 9000)));
+      for (let i = 0; i < count; i++) {
+        const x = Math.random() * w;
+        const y = Math.random() * h;
+        const r = Math.random() * 1.2 + 0.4;
+        const a = 0.08 + Math.random() * 0.14;
+        const tint = Math.random() < 0.3 ? 0xa6c4ff : 0xffffff;
+        if (Math.random() < 0.08) {
+          starLayer.beginFill(tint, a * 0.6);
+          starLayer.drawCircle(x, y, r * 3.2);
+          starLayer.endFill();
+        }
+        starLayer.beginFill(tint, a);
+        starLayer.drawCircle(x, y, r);
+        starLayer.endFill();
+      }
+      starLayer.filters = [new PIXI.BlurFilter(0.6)];
+    }
+
+    function resize() {
+      const center = app ? getCameraCenter() : null;
+      staticDirty = true;
+      generateStarfield();
+      if (center) centerOnPoint(center.x, center.y);
+      if (lastFrame) render(lastFrame);
+    }
+    window.addEventListener("resize", resize);
+
+    function clearLayer(layer) {
+      const children = layer.removeChildren();
+      children.forEach(child => child.destroy({ children: true }));
+    }
+
+    function buildNeighbors(lanes) {
+      const map = new Map();
+      (lanes || []).forEach(pair => {
+        const [a, b] = pair;
+        if (!map.has(a)) map.set(a, new Set());
+        if (!map.has(b)) map.set(b, new Set());
+        map.get(a).add(b);
+        map.get(b).add(a);
+      });
+      neighborsById = map;
+    }
+
+    function findPath(startId, endId) {
+      if (startId === endId) return [startId];
+      const queue = [startId];
+      const visited = new Set([startId]);
+      const prev = new Map();
+      while (queue.length) {
+        const current = queue.shift();
+        const neighbors = neighborsById.get(current);
+        if (!neighbors) continue;
+        for (const next of neighbors) {
+          if (visited.has(next)) continue;
+          visited.add(next);
+          prev.set(next, current);
+          if (next === endId) {
+            const path = [endId];
+            let back = current;
+            while (back !== undefined) {
+              path.push(back);
+              if (back === startId) break;
+              back = prev.get(back);
+            }
+            return path.reverse();
+          }
+          queue.push(next);
+        }
+      }
+      return null;
+    }
+
+    function updateIdleStrength(frame) {
+      idleStrengthBySystem = new Map();
+      idleFleetIdsBySystem = new Map();
+      if (!playerFaction || !frame || !Array.isArray(frame.fleets)) return;
+      frame.fleets.forEach(fl => {
+        if (!fl || fl.owner !== playerFaction) return;
+        if (fl.eta !== 0 || fl.system_id === null || fl.system_id === undefined) return;
+        if (fl.strength <= 0) return;
+        const current = idleStrengthBySystem.get(fl.system_id) || 0;
+        idleStrengthBySystem.set(fl.system_id, current + fl.strength);
+        const fleetList = idleFleetIdsBySystem.get(fl.system_id) || [];
+        fleetList.push(fl.id);
+        idleFleetIdsBySystem.set(fl.system_id, fleetList);
+      });
+    }
+
+    async function sendOrder(fromId, toId, reason = "human") {
+      await apiFetch("/orders", {
+        method: "POST",
+        body: JSON.stringify({
+          orders: [
+            {
+              faction: playerFaction,
+              origin_id: fromId,
+              target_id: toId,
+              reason,
+            },
+          ],
+        }),
+      });
+    }
+
+    async function sendOrders(orders) {
+      if (!orders.length) return;
+      await apiFetch("/orders", {
+        method: "POST",
+        body: JSON.stringify({ orders }),
+      });
+    }
+
+    function centerOnSystem(systemId) {
+      if (systemId === null || systemId === undefined) return;
+      const p = lastProj[systemId];
+      if (!p) return;
+      centerOnPoint(p.x, p.y);
+    }
+
+    function renderSelection() {
+      selectionLayer.clear();
+      selectionLayer.removeChildren().forEach(child => child.destroy());
+      previewLayer.clear();
+      if (!lastFrame) return;
+      const systems = lastFrame.systems || [];
+      const byId = new Map(systems.map(sys => [sys.id, sys]));
+      if (selectedOriginId !== null) {
+        const sys = byId.get(selectedOriginId);
+        const p = lastProj[selectedOriginId];
+        if (sys && p) {
+          const r = 3 + (typeof sys.value === "number" ? sys.value : 1) * 0.7;
+          selectionLayer.lineStyle(2, 0x63e0ff, 0.9);
+          selectionLayer.drawCircle(p.x, p.y, r + 10);
+        }
+      }
+      if (selectedTargetId !== null) {
+        const sys = byId.get(selectedTargetId);
+        const p = lastProj[selectedTargetId];
+        if (sys && p) {
+          const r = 3 + (typeof sys.value === "number" ? sys.value : 1) * 0.7;
+          selectionLayer.lineStyle(2, 0xffb86c, 0.9);
+          selectionLayer.drawCircle(p.x, p.y, r + 10);
+        }
+      }
+      const previewId = previewTargetId !== null ? previewTargetId : selectedTargetId;
+      if (selectedOriginId !== null && previewId !== null && previewId !== selectedOriginId) {
+        const path = findPath(selectedOriginId, previewId);
+        if (path && path.length > 1) {
+          previewLayer.lineStyle(3, 0x7ed0ff, 0.25);
+          path.forEach((nodeId, idx) => {
+            const p = lastProj[nodeId];
+            if (!p) return;
+            if (idx === 0) previewLayer.moveTo(p.x, p.y);
+            else previewLayer.lineTo(p.x, p.y);
+          });
+          previewLayer.lineStyle(1.5, 0xffffff, 0.4);
+          path.forEach((nodeId) => {
+            const p = lastProj[nodeId];
+            if (!p) return;
+            previewLayer.drawCircle(p.x, p.y, 4);
+          });
+        }
+      }
+    }
+
+    function renderPreviewOverlay(pulseValue) {
+      if (!lastFrame) return;
+      previewTerritoryLayer.clear();
+      previewGradientLayer.clear();
+      previewGlowLayer.clear();
+      if (!previewFactionId) {
+        territoryLayer.alpha = 1;
+        return;
+      }
+      territoryLayer.alpha = 0.2;
+      if (!lastVoronoiCells) return;
+      const systems = lastFrame.systems || [];
+      const previewAlpha = 0.35 + 0.4 * pulseValue;
+      const now = performance.now();
+      const sweepStrength = 0.45 + 0.45 * pulseValue;
+      const gradientTex = getPreviewGradientTexture();
+      const gradMatrix = new PIXI.Matrix();
+      gradMatrix.rotate(Math.PI * 0.25);
+      gradMatrix.translate(now * 0.1, now * 0.07);
+      systems.forEach(sys => {
+        if (!sys.owner || String(sys.owner) !== String(previewFactionId)) return;
+        const poly = lastVoronoiCells.get(sys.id);
+        if (!poly || poly.length < 3) return;
+        const points = [];
+        for (let i = 0; i < poly.length; i++) {
+          const px = poly[i].x;
+          const py = poly[i].y;
+          points.push(px, py);
+        }
+        const col = lastFactionColors[sys.owner] || "#fff";
+        previewTerritoryLayer.beginFill(colorToHex(col), previewAlpha);
+        previewTerritoryLayer.drawPolygon(points);
+        previewTerritoryLayer.endFill();
+
+        previewGradientLayer.beginTextureFill({
+          texture: gradientTex,
+          color: colorToHex(col),
+          alpha: sweepStrength,
+          matrix: gradMatrix,
+        });
+        previewGradientLayer.drawPolygon(points);
+        previewGradientLayer.endFill();
+
+        previewGlowLayer.lineStyle(8, colorToHex(col), 0.2 + 0.12 * pulseValue);
+        previewGlowLayer.drawPolygon(points);
+        previewGlowLayer.lineStyle(2.6, 0xffffff, 0.22 + 0.12 * pulseValue);
+        previewGlowLayer.drawPolygon(points);
+      });
+      previewGlowLayer.filters = [new PIXI.BlurFilter(3)];
+    }
+
+    function pickSystemAt(x, y) {
+      if (!lastFrame || !Array.isArray(lastFrame.systems)) return null;
+      const world = screenToWorld(x, y);
+      let bestId = null;
+      let bestDist = 16 / camera.scale;
+      lastFrame.systems.forEach(sys => {
+        const p = lastProj[sys.id];
+        if (!p) return;
+        const dx = p.x - world.x;
+        const dy = p.y - world.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestId = sys.id;
+        }
+      });
+      return bestId;
+    }
+
+    function updateHoverInfo(frame) {
+      if (hoverSystemId === null) {
+        hoverInfoText = "—";
+        return;
+      }
+      const systems = frame.systems || [];
+      const sys = systems.find(s => s.id === hoverSystemId);
+      if (!sys) {
+        hoverInfoText = "—";
+        return;
+      }
+      const fleetsHere = (frame.fleets || []).filter(fl => fl.system_id === hoverSystemId && fl.eta === 0);
+      if (!fleetsHere.length) {
+        hoverInfoText = `#${hoverSystemId} empty`;
+        return;
+      }
+      const byOwner = new Map();
+      fleetsHere.forEach(fl => {
+        const entry = byOwner.get(fl.owner) || { count: 0, strength: 0 };
+        entry.count += 1;
+        entry.strength += fl.strength || 0;
+        byOwner.set(fl.owner, entry);
+      });
+      const totalCount = fleetsHere.length;
+      const totalStrength = fleetsHere.reduce((acc, fl) => acc + (fl.strength || 0), 0);
+      const parts = [];
+      byOwner.forEach((val, owner) => {
+        parts.push(`${owner}:${val.count}/${val.strength.toFixed(1)}`);
+      });
+      hoverInfoText = `#${hoverSystemId} ${totalCount} fleets ${totalStrength.toFixed(1)} [${parts.join(" ")}]`;
+    }
+
+    function renderStatic(frame, factionColors) {
+      clearLayer(territoryLayer);
+      laneLayer.clear();
+      lastProj = {};
+
+      const w = app.renderer.width;
+      const h = app.renderer.height;
+      const padding = Math.max(36, Math.min(w, h) * 0.06);
+      const innerW = w - 2 * padding;
+      const innerH = h - 2 * padding;
+      const systems = frame.systems || [];
+      const lanes = frame.lanes || [];
+      buildNeighbors(lanes);
+      const edgeMap = new Map();
+      const pts = [];
+      const radiusById = new Map();
+      systems.forEach(sys => {
+        const value = typeof sys.value === "number" ? sys.value : 1;
+        const r = 3 + value * 0.7;
+        lastProj[sys.id] = {
+          x: padding + sys.x * innerW,
+          y: padding + sys.y * innerH,
+        };
+        radiusById.set(sys.id, r);
+        pts.push({ id: sys.id, x: lastProj[sys.id].x, y: lastProj[sys.id].y, owner: sys.owner });
+      });
+
+      if (pts.length >= 3) {
+        const center = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+        center.x /= pts.length;
+        center.y /= pts.length;
+        const bins = 120;
+        const baseExpand = Math.max(32, padding * 1.1);
+        const hullRadius = new Array(bins).fill(0);
+        const requiredRadius = new Array(bins).fill(0);
+        pts.forEach(p => {
+          const dx = p.x - center.x;
+          const dy = p.y - center.y;
+          const angle = Math.atan2(dy, dx);
+          const dist = Math.hypot(dx, dy);
+          const extra = radiusById.get(p.id) || 6;
+          const idx = Math.floor(((angle + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * bins);
+          const next = dist + baseExpand + extra;
+          const spread = Math.max(1, Math.ceil(bins * 0.03));
+          for (let offset = -spread; offset <= spread; offset++) {
+            const i = (idx + offset + bins) % bins;
+            hullRadius[i] = Math.max(hullRadius[i], next);
+            requiredRadius[i] = Math.max(requiredRadius[i], next);
+          }
+        });
+        for (let i = 0; i < bins; i++) {
+          if (hullRadius[i] === 0) {
+            hullRadius[i] = hullRadius[(i - 1 + bins) % bins] || hullRadius[(i + 1) % bins] || baseExpand;
+          }
+        }
+        for (let pass = 0; pass < 2; pass++) {
+          const smooth = hullRadius.slice();
+          for (let i = 0; i < bins; i++) {
+            const prev = hullRadius[(i - 1 + bins) % bins];
+            const next = hullRadius[(i + 1) % bins];
+            smooth[i] = (prev + hullRadius[i] * 2 + next) / 4;
+          }
+          for (let i = 0; i < bins; i++) {
+            hullRadius[i] = Math.max(smooth[i], requiredRadius[i]);
+          }
+        }
+        const hullPoints = [];
+        for (let i = 0; i < bins; i++) {
+          const angle = (i / bins) * Math.PI * 2;
+          const r = hullRadius[i];
+          hullPoints.push({ x: center.x + Math.cos(angle) * r, y: center.y + Math.sin(angle) * r });
+        }
+        const smoothHull = chaikinSmooth(hullPoints, 2);
+        hullMask.clear();
+        hullMask.beginFill(0xffffff, 1);
+        hullMask.drawPolygon(smoothHull.flatMap(p => [p.x, p.y]));
+        hullMask.endFill();
+        hullOutline.clear();
+        hullOutline.lineStyle(2.2, 0xf2f4ff, 0.35);
+        hullOutline.drawPolygon(smoothHull.flatMap(p => [p.x, p.y]));
+      }
+
+      const borderPad = padding * 1.6;
+      const voronoiCells = computeVoronoi(pts, {
+        minX: -borderPad,
+        minY: -borderPad,
+        maxX: w + borderPad,
+        maxY: h + borderPad,
+      });
+      lastVoronoiCells = voronoiCells;
+
+      // Lanes
+      laneLayer.lineStyle(4, 0x4d6bd6, 0.08);
+      lanes.forEach(([a, b]) => {
+        const pa = lastProj[a], pb = lastProj[b];
+        if (!pa || !pb) return;
+        laneLayer.moveTo(pa.x, pa.y);
+        laneLayer.lineTo(pb.x, pb.y);
+      });
+      laneLayer.lineStyle(1.2, 0xb8c7ff, 0.5);
+      lanes.forEach(([a, b]) => {
+        const pa = lastProj[a], pb = lastProj[b];
+        if (!pa || !pb) return;
+        laneLayer.moveTo(pa.x, pa.y);
+        laneLayer.lineTo(pb.x, pb.y);
+      });
+
+      // Territory rendering using circular haze around systems and border strokes only where factions meet
+      const pointKey = (pt) => `${pt.x.toFixed(2)},${pt.y.toFixed(2)}`;
+      const edgeKey = (a, b) => {
+        const ak = pointKey(a);
+        const bk = pointKey(b);
+        return ak < bk ? `${ak}|${bk}` : `${bk}|${ak}`;
+      };
+
+      function drawStraightPath(graphics, points) {
+        if (!points || points.length < 2) return;
+        graphics.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          graphics.lineTo(points[i].x, points[i].y);
+        }
+      }
+
+      function chainEdges(edges) {
+        const nodeEdges = new Map();
+        const degrees = new Map();
+        edges.forEach((edge, idx) => {
+          const keys = [edge.aKey, edge.bKey];
+          keys.forEach((key) => {
+            if (!nodeEdges.has(key)) nodeEdges.set(key, []);
+            nodeEdges.get(key).push(idx);
+            degrees.set(key, (degrees.get(key) || 0) + 1);
+          });
+        });
+
+        const used = new Array(edges.length).fill(false);
+        const chains = [];
+
+        function findUnusedEdge(nodeKey) {
+          const list = nodeEdges.get(nodeKey) || [];
+          for (let i = 0; i < list.length; i++) {
+            const idx = list[i];
+            if (!used[idx]) return idx;
+          }
+          return -1;
+        }
+
+        while (used.some((u) => !u)) {
+          let startEdgeIdx = used.findIndex((u) => !u);
+          const startEdge = edges[startEdgeIdx];
+          let startNode = startEdge.aKey;
+          if ((degrees.get(startEdge.aKey) || 0) === 1) {
+            startNode = startEdge.aKey;
+          } else if ((degrees.get(startEdge.bKey) || 0) === 1) {
+            startNode = startEdge.bKey;
+          }
+
+          const chain = [];
+          let currentNode = startNode;
+          while (true) {
+            const edgeIdx = findUnusedEdge(currentNode);
+            if (edgeIdx === -1) break;
+            const edge = edges[edgeIdx];
+            used[edgeIdx] = true;
+            const forward = edge.aKey === currentNode;
+            const nextNode = forward ? edge.bKey : edge.aKey;
+            chain.push({
+              edge,
+              start: forward ? edge.a : edge.b,
+              end: forward ? edge.b : edge.a,
+            });
+            currentNode = nextNode;
+          }
+
+          if (chain.length) chains.push(chain);
+        }
+
+        return chains;
+      }
+
+      // Build edge map for faction borders
+      systems.forEach(sys => {
+        if (!sys.owner) return;
+        const poly = voronoiCells.get(sys.id);
+        if (!poly || poly.length < 3) return;
+        for (let i = 0; i < poly.length; i++) {
+          const a = poly[i];
+          const b = poly[(i + 1) % poly.length];
+          const key = edgeKey(a, b);
+          if (!edgeMap.has(key)) {
+            edgeMap.set(key, {
+              a,
+              b,
+              aKey: pointKey(a),
+              bKey: pointKey(b),
+              owners: new Map(),
+              count: 0,
+            });
+          }
+          const edgeEntry = edgeMap.get(key);
+          const owners = edgeEntry.owners;
+          edgeEntry.count += 1;
+          if (!owners.has(sys.owner)) owners.set(sys.owner, lastProj[sys.id]);
+        }
+      });
+
+      // Territory fill (soft, blurred) per Voronoi cell
+      const territoryFill = new PIXI.Graphics();
+      systems.forEach(sys => {
+        if (!sys.owner) return;
+        const col = factionColors[sys.owner] || "#888";
+        const c = colorToHex(col);
+        const poly = voronoiCells.get(sys.id);
+        if (!poly || poly.length < 3) return;
+        const points = [];
+        for (let i = 0; i < poly.length; i++) {
+          points.push(poly[i].x, poly[i].y);
+        }
+        territoryFill.beginFill(c, 0.16);
+        territoryFill.drawPolygon(points);
+        territoryFill.endFill();
+      });
+      territoryFill.filters = [];
+      territoryLayer.addChild(territoryFill);
+
+      // Draw faction borders along edges where ownership differs
+      const borderLine = new PIXI.Graphics();
+      const lineWidth = 2.2;
+      const lineAlpha = 0.9;
+      const offsetDist = 1.8;
+      const outerEdgesByOwner = new Map();
+      const pairEdges = new Map();
+
+      edgeMap.forEach((edge) => {
+        if (edge.owners.size === 1) {
+          if (edge.count > 1) return;
+          const [[ownerId]] = edge.owners;
+          if (!outerEdgesByOwner.has(ownerId)) outerEdgesByOwner.set(ownerId, []);
+          outerEdgesByOwner.get(ownerId).push(edge);
+          return;
+        }
+        const ownerIds = Array.from(edge.owners.keys()).sort();
+        const pairKey = ownerIds.join("|");
+        if (!pairEdges.has(pairKey)) pairEdges.set(pairKey, []);
+        pairEdges.get(pairKey).push(edge);
+      });
+
+      outerEdgesByOwner.forEach((edges, ownerId) => {
+        const outerChains = chainEdges(edges);
+        outerChains.forEach((chain) => {
+          const first = chain[0];
+          const c = colorToHex(factionColors[ownerId] || "#888");
+          borderLine.lineStyle({ width: lineWidth, color: c, alpha: lineAlpha, cap: PIXI.LINE_CAP.ROUND, join: PIXI.LINE_JOIN.ROUND });
+          const points = [first.start];
+          chain.forEach((seg) => {
+            points.push(seg.end);
+          });
+          drawStraightPath(borderLine, points);
+        });
+      });
+
+      pairEdges.forEach((edges) => {
+        const chains = chainEdges(edges);
+        chains.forEach((chain) => {
+          const ownerIds = Array.from(chain[0].edge.owners.keys());
+          ownerIds.forEach((ownerId) => {
+            const c = colorToHex(factionColors[ownerId] || "#888");
+            borderLine.lineStyle({ width: lineWidth, color: c, alpha: lineAlpha, cap: PIXI.LINE_CAP.ROUND, join: PIXI.LINE_JOIN.ROUND });
+            const points = [];
+            chain.forEach((seg) => {
+              const ownerPos = seg.edge.owners.get(ownerId);
+              if (!ownerPos) return;
+              const midx = (seg.start.x + seg.end.x) * 0.5;
+              const midy = (seg.start.y + seg.end.y) * 0.5;
+              const dx = ownerPos.x - midx;
+              const dy = ownerPos.y - midy;
+              const len = Math.hypot(dx, dy) || 1;
+              const ox = (dx / len) * offsetDist;
+              const oy = (dy / len) * offsetDist;
+              const sx = seg.start.x + ox;
+              const sy = seg.start.y + oy;
+              const ex = seg.end.x + ox;
+              const ey = seg.end.y + oy;
+              points.push({ x: sx, y: sy });
+              points.push({ x: ex, y: ey });
+            });
+            drawStraightPath(borderLine, points);
+          });
+        });
+      });
+      territoryLayer.addChild(borderLine);
+    }
+
+    function render(frame) {
+      if (!frame || !Array.isArray(frame.systems)) return;
+      lastFrame = frame;
+      if (mapSeedEl) {
+        const seedValue = frame.generator_seed !== undefined && frame.generator_seed !== null
+          ? String(frame.generator_seed)
+          : "live";
+        mapSeedEl.textContent = `Seed: ${seedValue}`;
+        if (seedInputEl && document.activeElement !== seedInputEl && !seedInputDirty) {
+          seedInputEl.value = seedValue === "live" ? "" : seedValue;
+        }
+      }
+
+      const w = app.renderer.width;
+      const h = app.renderer.height;
+      const systems = frame.systems || [];
+      const fleets = frame.fleets || [];
+      updateIdleStrength(frame);
+      updateHoverInfo(frame);
+      const tick = frame.tick || 0;
+      const phase = (tick % 40) / 40;
+      const pulse = 0.5 + 0.5 * Math.sin(phase * Math.PI * 2);
+      const previewPulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.003);
+      const systemCountByOwner = {};
+      systems.forEach(s => {
+        if (!s || !s.owner) return;
+        systemCountByOwner[s.owner] = (systemCountByOwner[s.owner] || 0) + 1;
+      });
+
+      const factionData = frame.factions || [];
+      const factionColors = {};
+      factionData.forEach(f => { factionColors[f.id] = f.color || "#ffffff"; });
+      if (!factionData.length) {
+        const ownersSeen = Array.from(new Set((systems || []).map(s => s.owner).filter(Boolean)));
+        ownersSeen.forEach((fid, idx) => {
+          if (!factionColors[fid]) factionColors[fid] = FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+        });
+      }
+      lastFactionColors = factionColors;
+
+      if (staticDirty) {
+        renderStatic(frame, factionColors);
+        staticDirty = false;
+      }
+
+      renderPreviewOverlay(previewPulse);
+
+      clearLayer(systemLayer);
+      clearLayer(fleetLayer);
+
+      // Fleet grouping
+      const fleetsBySystem = {};
+      const enroute = [];
+      fleets.forEach(fl => {
+        if (fl.enroute_to !== null && fl.enroute_to !== undefined && fl.eta > 0) {
+          enroute.push(fl);
+        } else if (fl.system_id !== null && fl.system_id !== undefined) {
+          (fleetsBySystem[fl.system_id] ||= []).push(fl);
+        }
+      });
+
+      const highlights = new Set(frame.highlight_ids || []);
+
+      // Enroute fleets as lines
+      const enrouteGlow = new PIXI.Graphics();
+      enrouteGlow.lineStyle(5, 0x9cb5ff, 0.12);
+      enroute.forEach(fl => {
+        const from = lastProj[fl.enroute_from];
+        const to = lastProj[fl.enroute_to];
+        if (!from || !to) return;
+        enrouteGlow.moveTo(from.x, from.y);
+        enrouteGlow.lineTo(to.x, to.y);
+      });
+      fleetLayer.addChild(enrouteGlow);
+
+      const enrouteGfx = new PIXI.Graphics();
+      enrouteGfx.lineStyle(1.6, 0xd3deff, 0.5);
+      enroute.forEach(fl => {
+        const from = lastProj[fl.enroute_from];
+        const to = lastProj[fl.enroute_to];
+        if (!from || !to) return;
+        enrouteGfx.moveTo(from.x, from.y);
+        enrouteGfx.lineTo(to.x, to.y);
+      });
+      fleetLayer.addChild(enrouteGfx);
+
+      systems.forEach((sys, idx) => {
+        const p = lastProj[sys.id];
+        if (!p) return;
+        const value = typeof sys.value === "number" ? sys.value : 1;
+        const r = 3 + value * 0.7;
+        let color = 0x6b7aa6;
+        if (sys.owner && factionColors[sys.owner]) color = colorToHex(factionColors[sys.owner]);
+        const isHighlight = highlights.has(sys.id);
+        const isPreview = previewFactionId && String(sys.owner) === String(previewFactionId);
+        const isHover = hoverSystemId === sys.id;
+        const isBesieged = !!sys.is_besieged;
+        const heat = typeof sys.heat === "number" ? sys.heat : 0;
+        const heatNorm = Math.max(0, Math.min(1, heat / 3));
+        const twinkle = 0.7 + 0.3 * Math.sin(tick * 0.18 + (sys.id || 0) * 1.7);
+        const valueTier = value >= 8 ? 3 : value >= 5 ? 2 : value >= 3 ? 1 : 0;
+
+        const halo = new PIXI.Sprite(getGradientTexture(color));
+        halo.anchor.set(0.5);
+        halo.position.set(p.x, p.y);
+        const haloSize = Math.max(30, r * (6.1 + 0.5 * twinkle));
+        halo.width = haloSize;
+        halo.height = haloSize;
+        halo.alpha = sys.owner ? 0.48 + 0.12 * twinkle : 0.22 + 0.08 * twinkle;
+        halo.blendMode = PIXI.BLEND_MODES.ADD;
+        systemLayer.addChild(halo);
+
+        // Heat glow
+        if (heatNorm > 0.2) {
+          const heatG = new PIXI.Graphics();
+          heatG.beginFill(0xff7850, 0.12 + 0.2 * heatNorm);
+          heatG.drawCircle(p.x, p.y, r + 4 + 4 * heatNorm);
+          heatG.endFill();
+          heatG.filters = [new PIXI.BlurFilter(3)];
+          systemLayer.addChild(heatG);
+        }
+
+        // System class glyph
+        if (sys.kind && sys.kind !== "normal") {
+          const glyph = sys.kind === "forge" ? "F" : sys.kind === "hive" ? "H" : "★";
+          const glyphText = new PIXI.Text(glyph, {
+            fontFamily: "Palatino Linotype, serif",
+            fontSize: 10,
+            fill: 0xf0f4ff,
+            dropShadow: true,
+            dropShadowColor: 0x0b1020,
+            dropShadowBlur: 4,
+            dropShadowDistance: 0,
+          });
+          glyphText.anchor.set(0.5, 0.5);
+          glyphText.position.set(p.x, p.y - r - 10);
+          systemLayer.addChild(glyphText);
+        }
+
+        const body = new PIXI.Graphics();
+        const rim = lightenColor(color, 35);
+        body.lineStyle(1.2, rim, 0.9);
+        body.beginFill(color, 1);
+        body.drawCircle(p.x, p.y, r);
+        body.endFill();
+        systemLayer.addChild(body);
+
+        const core = new PIXI.Graphics();
+        core.beginFill(lightenColor(color, 70), 0.45 + 0.25 * twinkle);
+        core.drawCircle(p.x, p.y, Math.max(1.2, r * 0.42));
+        core.endFill();
+        systemLayer.addChild(core);
+
+        // Fleets at system
+        const fleetsHere = fleetsBySystem[sys.id] || [];
+        if (fleetsHere.length) {
+          const orbit = r + 6;
+          const n = fleetsHere.length;
+          const sinCache = [];
+          const cosCache = [];
+          for (let i = 0; i < n; i++) {
+            const angle = 2 * Math.PI * (i / n);
+            sinCache.push(Math.sin(angle));
+            cosCache.push(Math.cos(angle));
+          }
+          fleetsHere.forEach((fl, i) => {
+            const fx = p.x + orbit * cosCache[i];
+            const fy = p.y + orbit * sinCache[i];
+            const strength = typeof fl.strength === "number" ? fl.strength : 0;
+            let fr = 1.5 + Math.log10(strength + 1);
+            fr = Math.max(1.5, Math.min(fr, 4));
+            const fcol = factionColors[fl.owner] || "#ffffff";
+            const fg = new PIXI.Graphics();
+            fg.beginFill(colorToHex(fcol), 1);
+            fg.drawCircle(fx, fy, fr);
+            fg.endFill();
+            fleetLayer.addChild(fg);
+          });
+
+          const totalStrength = fleetsHere.reduce((acc, fl) => acc + (fl.strength || 0), 0);
+          const strengthLabel = new PIXI.Text(totalStrength.toFixed(1), {
+            fontFamily: "Consolas, Menlo, monospace",
+            fontSize: 12,
+            fill: 0xf5f7ff,
+            stroke: 0x0b1020,
+            strokeThickness: 3,
+            dropShadow: true,
+            dropShadowColor: 0x0b1020,
+            dropShadowBlur: 4,
+            dropShadowDistance: 0,
+          });
+          strengthLabel.anchor.set(0.5, 1);
+          strengthLabel.position.set(p.x, p.y - r - 2);
+          systemLayer.addChild(strengthLabel);
+        }
+
+        // Labels (every other)
+        if (idx % 2 === 0) {
+          const label = new PIXI.Text(String(sys.id), {
+            fontFamily: "Consolas, Menlo, monospace",
+            fontSize: 10,
+            fill: 0xdce6ff,
+            dropShadow: true,
+            dropShadowColor: 0x0b1020,
+            dropShadowBlur: 4,
+            dropShadowDistance: 0,
+          });
+          label.anchor.set(0.5, 0);
+          label.position.set(p.x, p.y + r + 2);
+          systemLayer.addChild(label);
+        }
+
+      });
+
+      // HUD
+      const now = performance.now();
+      lastRenderTs = now;
+      const fps = app.ticker && app.ticker.FPS ? app.ticker.FPS.toFixed(1) : "—";
+      statusEl.innerHTML = `Tick: ${frame.tick ?? "—"}<br/>FPS: ${fps}<br/>Systems: ${systems.length}<br/>Mode: live<br/>Zoom: ${camera.scale.toFixed(2)}x<br/>Hover: ${hoverInfoText}`;
+
+      const factionsList = (frame.factions && frame.factions.length ? frame.factions : Object.entries(factionColors).map(([id, color]) => ({ id, name: id, color })));
+      lastFactionNames = factionsList.reduce((acc, f) => {
+        acc[f.id] = f.name || f.id;
+        return acc;
+      }, {});
+      const enrichedFactions = factionsList
+        .map(f => ({ ...f, owned: systemCountByOwner[f.id] || 0 }))
+        .filter(f => f.owned > 0)
+        .sort((a, b) => b.owned - a.owned || (a.id || "").localeCompare(b.id || ""));
+      const signature = enrichedFactions.map(f => `${f.id}:${f.name || ""}:${f.color || ""}:${f.owned}`).join("|");
+      if (lastFactionsSignature === null || signature !== lastFactionsSignature) {
+        lastFactionsSignature = signature;
+        factionsEl.innerHTML = "";
+        enrichedFactions.forEach(f => {
+          const row = document.createElement("div");
+          row.className = "faction";
+          row.addEventListener("mouseenter", () => setPreviewFaction(f.id));
+          row.addEventListener("mouseleave", () => {
+            setPreviewFaction(null);
+          });
+          const sw = document.createElement("div");
+          sw.className = "swatch";
+          sw.style.background = f.color || "#fff";
+          const label = document.createElement("div");
+          label.className = "label";
+          label.textContent = `${f.name || f.id} (${f.owned})`;
+          row.appendChild(sw);
+          row.appendChild(label);
+          factionsEl.appendChild(row);
+        });
+      }
+      frameCounter++;
+      renderSiegePulse();
+    }
+
+    function renderSiegePulse() {
+      if (!lastFrame || !Array.isArray(lastFrame.systems)) return;
+      siegeLayer.clear();
+      const systems = lastFrame.systems || [];
+      const siegePulse = 0.6 + 0.4 * globalSiegePulse;
+      siegeLayer.lineStyle(1.6, 0xff7b7b, 0.9);
+      systems.forEach(sys => {
+        if (!sys || !sys.is_besieged) return;
+        const p = lastProj[sys.id];
+        if (!p) return;
+        const value = typeof sys.value === "number" ? sys.value : 1;
+        const r = 3 + value * 0.7;
+        siegeLayer.drawCircle(p.x, p.y, r + 8 + siegePulse * 3);
+      });
+    }
+
+    function mergeUpdate(msg) {
+      if (!msg) return null;
+      if (msg.type === "snapshot" && msg.data) {
+        staticDirty = true;
+        return msg.data;
+      }
+      if (!msg.type || msg.type === "frame") {
+        staticDirty = true;
+        return msg;
+      }
+      if (msg.type !== "delta") return null;
+      if (!lastFrame) return null;
+      const next = {
+        ...lastFrame,
+        tick: msg.tick ?? lastFrame.tick,
+        tick_delay_ms: msg.tick_delay_ms ?? lastFrame.tick_delay_ms,
+        generator_seed: msg.generator_seed ?? lastFrame.generator_seed,
+        highlight_ids: msg.highlight_ids ?? lastFrame.highlight_ids ?? [],
+        events: msg.events ?? [],
+        factions: msg.factions ?? lastFrame.factions ?? [],
+      };
+      const systems = (lastFrame.systems || []).map(s => ({ ...s }));
+      if (Array.isArray(msg.changed_systems)) {
+        const byId = new Map(systems.map(s => [s.id, s]));
+        let touchedStatic = false;
+        msg.changed_systems.forEach(ch => {
+          if (!ch || ch.id === undefined || ch.id === null) return;
+          const affectsStatic = ch.owner !== undefined || ch.x !== undefined || ch.y !== undefined;
+          const existing = byId.get(ch.id);
+          if (existing) Object.assign(existing, ch);
+          else { systems.push({ ...ch }); byId.set(ch.id, systems[systems.length - 1]); }
+          if (affectsStatic) touchedStatic = true;
+        });
+        if (touchedStatic) staticDirty = true;
+      }
+      next.systems = systems;
+
+      let fleets = (lastFrame.fleets || []).map(f => ({ ...f }));
+      if (Array.isArray(msg.removed_fleets) && msg.removed_fleets.length) {
+        const toRemove = new Set(msg.removed_fleets);
+        fleets = fleets.filter(f => !toRemove.has(f.id));
+      }
+      if (Array.isArray(msg.changed_fleets)) {
+        const byId = new Map(fleets.map(f => [f.id, f]));
+        msg.changed_fleets.forEach(fl => {
+          if (!fl || fl.id === undefined || fl.id === null) return;
+          const existing = byId.get(fl.id);
+          if (existing) byId.set(fl.id, { ...existing, ...fl });
+          else byId.set(fl.id, { ...fl });
+        });
+        fleets = Array.from(byId.values());
+      }
+      next.fleets = fleets;
+      return next;
+    }
+
+    async function fetchJson(url) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      return res.json();
+    }
+
+    async function loadPreview(seed) {
+      try {
+        const data = await fetchJson(`${previewPath}?seed=${encodeURIComponent(seed)}`);
+        tickDelayMs = data.tick_delay_ms || (data.tick_delay ? data.tick_delay * 1000 : 0);
+        hideNotice();
+        scheduleRender(data);
+      } catch (err) {
+        showNotice(`Preview failed (${err.message}).`);
+      }
+    }
+
+    async function loadSnapshotOnce() {
+      try {
+        const data = await fetchJson(snapshotPath);
+        tickDelayMs = data.tick_delay_ms || (data.tick_delay ? data.tick_delay * 1000 : 0);
+        scheduleRender(data);
+      } catch (err) {
+        // ignore; ws will deliver snapshots
+      }
+    }
+
+    function connectWs() {
+      const ws = new WebSocket(wsUrl);
+      let opened = false;
+      let localFallback = false;
+      const fallbackTimer = setTimeout(() => {
+        if (opened) return;
+        if (basePathFallbackTried || basePath === "/") return;
+        basePathFallbackTried = true;
+        localFallback = true;
+        ws.close();
+        applyBasePath("/");
+        loadSnapshotOnce();
+        connectWs();
+      }, 1200);
+      ws.onmessage = (ev) => {
+        const payload = JSON.parse(ev.data);
+        if (payload && payload.type === "run_end") {
+          showWinner(payload);
+          return;
+        }
+        const merged = mergeUpdate(payload);
+        if (!merged) return;
+        if (typeof merged.tick_delay_ms === "number") tickDelayMs = merged.tick_delay_ms;
+        else if (typeof merged.tick_delay === "number") tickDelayMs = merged.tick_delay * 1000;
+        scheduleRender(merged);
+      };
+      ws.onclose = () => {
+        clearTimeout(fallbackTimer);
+        if (localFallback) return;
+        showNotice("Disconnected. Reconnecting...");
+        setTimeout(connectWs, 2000);
+      };
+      ws.onerror = () => {
+        if (!opened && !basePathFallbackTried && basePath !== "/") {
+          basePathFallbackTried = true;
+          localFallback = true;
+          applyBasePath("/");
+          loadSnapshotOnce();
+          connectWs();
+          return;
+        }
+        ws.close();
+      };
+      ws.onopen = () => {
+        opened = true;
+        clearTimeout(fallbackTimer);
+        hideNotice();
+      };
+    }
+
+    function scheduleRender(data) {
+      if (!data || !Array.isArray(data.systems) || data.systems.length === 0) return;
+      if (
+        typeof lastKnownTick === "number"
+        && typeof data.tick === "number"
+        && data.tick < lastKnownTick
+      ) {
+        handleUniverseReset();
+      }
+      if (typeof data.tick === "number") lastKnownTick = data.tick;
+      lastFrame = data;
+      const now = performance.now();
+      if (now - lastRenderTs < MIN_FULL_RENDER_MS) return;
+      if (renderScheduled) return;
+      renderScheduled = true;
+      requestAnimationFrame(() => {
+        render(lastFrame);
+        renderScheduled = false;
+      });
+    }
+
+    app.ticker.add(() => {
+      if (!lastFrame) return;
+      const now = performance.now();
+      if (now - lastPulseTs < MIN_PULSE_RENDER_MS) return;
+      lastPulseTs = now;
+      globalSiegePulse = 0.5 + 0.5 * Math.sin(now * 0.0045);
+      renderSiegePulse();
+      if (previewFactionId) {
+        const previewPulse = 0.5 + 0.5 * Math.sin(now * 0.003);
+        renderPreviewOverlay(previewPulse);
+      }
+    });
+
+    signInBtn.addEventListener("click", () => {
+      signIn().catch(err => showNotice(err.message));
+    });
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", () => {
+        authToken = "";
+        localStorage.removeItem(tokenStorageKey);
+        playerAddress = null;
+        playerFaction = null;
+        universeId = null;
+        setPreviewFaction(null);
+        setSelectedFaction(null);
+        setPlayerStatus("Not signed in.");
+        setStatusPlayer("Faction: —");
+        setUiStage("auth");
+        setLogoutVisible(false);
+        updateAuthControls();
+      });
+    }
+    // Claim handled via map selection.
+
+    function hideContextMenu() {
+      contextMenuEl.classList.remove("visible");
+      contextMenuSystemId = null;
+    }
+
+    function showContextMenu(x, y, systemId) {
+      contextMenuSystemId = systemId;
+      contextMenuTitleEl.textContent = `System #${systemId}`;
+      const idleOrigins = Array.from(idleFleetIdsBySystem.keys()).filter(id => id !== systemId);
+      const canRally = Boolean(playerFaction) && idleOrigins.length > 0;
+      contextRallyBtn.disabled = !canRally;
+      contextRallyBtn.textContent = canRally ? "Rally all idle fleets" : "No idle fleets to rally";
+
+      contextMenuEl.classList.add("visible");
+      const menuRect = contextMenuEl.getBoundingClientRect();
+      const maxX = window.innerWidth - menuRect.width - 12;
+      const maxY = window.innerHeight - menuRect.height - 12;
+      const posX = Math.min(Math.max(12, x), maxX);
+      const posY = Math.min(Math.max(12, y), maxY);
+      contextMenuEl.style.left = `${posX}px`;
+      contextMenuEl.style.top = `${posY}px`;
+    }
+
+    function buildRallyOrders(targetId) {
+      if (!playerFaction || !lastFrame) return [];
+      const orders = [];
+      for (const [originId, fleetIds] of idleFleetIdsBySystem.entries()) {
+        if (!fleetIds || originId === targetId) continue;
+        const path = findPath(originId, targetId);
+        if (!path || path.length < 2) continue;
+        fleetIds.forEach((fleetId) => {
+          orders.push({
+            faction: playerFaction,
+            origin_id: originId,
+            target_id: targetId,
+            reason: "human-rally",
+            fleet_id: fleetId,
+          });
+        });
+      }
+      return orders;
+    }
+
+    contextRallyBtn.addEventListener("click", () => {
+      if (contextMenuSystemId === null) return;
+      const orders = buildRallyOrders(contextMenuSystemId);
+      if (!orders.length) {
+        showNotice("No idle fleets to rally.");
+        setTimeout(hideNotice, 1200);
+        hideContextMenu();
+        return;
+      }
+      sendOrders(orders)
+        .then(() => {
+          showNotice(`Rally orders sent: ${orders.length}.`);
+          setTimeout(hideNotice, 1200);
+        })
+        .catch(err => showNotice(err.message))
+        .finally(() => hideContextMenu());
+    });
+
+    document.addEventListener("pointerdown", (ev) => {
+      if (!contextMenuEl.classList.contains("visible")) return;
+      if (contextMenuEl.contains(ev.target)) return;
+      hideContextMenu();
+    });
+
+    app.view.addEventListener("pointerdown", (ev) => {
+      if (ev.button === 2) return;
+      lastPointerDownAt = Date.now();
+      const rect = app.view.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const picked = pickSystemAt(x, y);
+      if (!lastFrame) return;
+
+      if (picked === null) {
+        panning = true;
+        panStart = { x: ev.clientX, y: ev.clientY };
+        panOrigin = { x: root.position.x, y: root.position.y };
+        return;
+      }
+
+      if (!playerFaction && picked !== null) {
+        const sys = (lastFrame.systems || []).find(s => s.id === picked);
+        if (sys && sys.owner) {
+          setPreviewFaction(sys.owner);
+          setSelectedFaction(sys.owner);
+        }
+      }
+      if (!playerFaction || picked === null) return;
+      const sys = (lastFrame.systems || []).find(s => s.id === picked);
+      if (!sys) return;
+      if (selectedOriginId === null) {
+        if (!idleStrengthBySystem.has(sys.id)) {
+          showNotice("No idle fleets at that system.");
+          setTimeout(hideNotice, 1200);
+          return;
+        }
+        selectedOriginId = sys.id;
+        selectedTargetId = null;
+        previewTargetId = null;
+        renderSelection();
+        return;
+      }
+      if (picked === selectedOriginId) {
+        selectedOriginId = null;
+        selectedTargetId = null;
+        previewTargetId = null;
+        renderSelection();
+        return;
+      }
+      selectedTargetId = picked;
+      previewTargetId = null;
+      const path = findPath(selectedOriginId, selectedTargetId);
+      if (!path || path.length < 2) {
+        showNotice("No route found.");
+        setTimeout(hideNotice, 1200);
+        selectedTargetId = null;
+        renderSelection();
+        return;
+      }
+      sendOrder(selectedOriginId, selectedTargetId, "human-route")
+        .catch(err => showNotice(err.message));
+      selectedOriginId = null;
+      selectedTargetId = null;
+      previewTargetId = null;
+      renderSelection();
+    });
+
+    app.view.addEventListener("contextmenu", (ev) => {
+      ev.preventDefault();
+      const rect = app.view.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const picked = pickSystemAt(x, y);
+      if (picked === null) {
+        hideContextMenu();
+        return;
+      }
+      showContextMenu(ev.clientX, ev.clientY, picked);
+    });
+
+    app.view.addEventListener("pointermove", (ev) => {
+      const rect = app.view.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      if (panning && panStart && panOrigin) {
+        const dx = ev.clientX - panStart.x;
+        const dy = ev.clientY - panStart.y;
+        setCamera(panOrigin.x + dx, panOrigin.y + dy, camera.scale);
+        return;
+      }
+      const prevHover = hoverSystemId;
+      hoverSystemId = pickSystemAt(x, y);
+      if (!playerFaction) {
+        const sys = (lastFrame.systems || []).find(s => s.id === hoverSystemId);
+        if (sys && sys.owner) setPreviewFaction(sys.owner);
+        else setPreviewFaction(null);
+      }
+      if (hoverSystemId !== prevHover) {
+        if (selectedOriginId !== null) {
+          previewTargetId = hoverSystemId;
+          renderSelection();
+        }
+      }
+    });
+
+    app.view.addEventListener("pointerup", () => {
+      panning = false;
+      panStart = null;
+      panOrigin = null;
+    });
+
+    app.view.addEventListener("pointerleave", () => {
+      panning = false;
+      panStart = null;
+      panOrigin = null;
+      hoverSystemId = null;
+      previewTargetId = null;
+      if (!playerFaction) {
+        setPreviewFaction(null);
+      }
+      renderSelection();
+    });
+
+    app.view.addEventListener("wheel", (ev) => {
+      ev.preventDefault();
+      const rect = app.view.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const zoomFactor = Math.exp(-ev.deltaY * 0.0012);
+      const nextScale = clamp(camera.scale * zoomFactor, MIN_ZOOM, MAX_ZOOM);
+      const world = screenToWorld(x, y);
+      setCamera(x - world.x * nextScale, y - world.y * nextScale, nextScale);
+    }, { passive: false });
+
+    (async function init() {
+      generateStarfield();
+      setUiStage("auth");
+      setLogoutVisible(!!authToken);
+      updateAuthControls();
+      await loadSnapshotOnce();
+      connectWs();
+      if (authToken) {
+        refreshPlayer()
+          .catch(() => {})
+          .then(() => refreshFactions().catch(() => {}));
+      } else {
+        refreshFactions().catch(() => {});
+      }
+    })();
+    })();
+  </script>
+</body>
+</html>
+    #auth-status {
+      font: 12px var(--font-mono);
+      line-height: 1.5;
+      color: #d9e3ff;
+      letter-spacing: 0;
+    }
+    #auth-status span {
+      font: inherit;
+    }
+    #auth-status .muted {
+      color: var(--muted);
+    }
+    #auth-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
