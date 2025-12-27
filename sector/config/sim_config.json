@@ -4,7 +4,7 @@
   "faction_count": 5,
   "faction_name_list": ["Empire", "Pirates", "Traders", "Mercenaries", "Synths"],
   "use_faction_count": true,
-  "tick_delay": 1,
+  "tick_delay": 0.3,
   "lease_ttl_ms": 60000,
   "order_block_ms": 1,
   "min_launch_strength": 3.0,
