@@ -5,11 +5,16 @@ metadata:
   namespace: sector-sim
   annotations:
     kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
+  tls:
+    - hosts:
+        - sector.seketa.it
+      secretName: sector-seketa-it-tls
   rules:
-    - host: sector.local
+    - host: sector.seketa.it
       http:
         paths:
           - path: /api(/|$)(.*)
