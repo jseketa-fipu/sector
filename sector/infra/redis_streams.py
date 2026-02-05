@@ -15,6 +15,7 @@ from typing import Any, Iterable, List, Optional
 
 from redis import asyncio as aioredis
 from redis.exceptions import ResponseError
+from pydantic import AnyUrl
 
 
 DEFAULT_REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
@@ -26,7 +27,7 @@ DEFAULT_SNAPSHOT_KEY = os.environ.get("SNAPSHOT_KEY", "sector:snapshot")
 class RedisStreams:
     def __init__(
         self,
-        url: str | None = None,
+        url: AnyUrl | None = None,
         event_stream: str | None = None,
         order_stream: str | None = None,
         snapshot_key: str | None = None,
@@ -132,7 +133,9 @@ class RedisStreams:
         """
         Fetch the most recent events (reverse range).
         """
-        entries = await self._redis.xrevrange(self.event_stream, max="+", min="-", count=count)
+        entries = await self._redis.xrevrange(
+            self.event_stream, max="+", min="-", count=count
+        )
         out: list[dict] = []
         for _, fields in entries:
             payload_raw = fields.get("data")

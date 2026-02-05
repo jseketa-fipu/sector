@@ -5,10 +5,6 @@ Visualization service serving the frontend and streaming snapshots/events.
 - Serves the static index.html bundled with this service.
 - Proxies the Redis-backed snapshot and events (WebSocket) for the UI.
 """
-from __future__ import annotations
-
-import os
-
 from pathlib import Path
 
 import uvicorn
@@ -19,30 +15,22 @@ import urllib.parse
 
 from sector.config import SIM_CONFIG
 from sector.infra.redis_streams import RedisStreams
-from sector.state_utils import snapshot_from_world
+from sector.state_utils import snapshot_from_world  # type: ignore
 from sector.world import create_sector
 
-from models import VizConfig
+from models import VisualizationWorkerSettings
 
 
-def _load_config() -> VizConfig:
-    return VizConfig(
-        redis_url=os.environ.get("REDIS_URL"),
-        api_url=os.environ.get("API_URL", "http://api:8000"),
-        port=int(os.environ.get("PORT", "9000")),
-    )
-
-
-_CONFIG = _load_config()
+config = VisualizationWorkerSettings()  # type: ignore[call-arg]
 
 BASE_DIR = Path(__file__).resolve().parent / "static"
 INDEX_PATH = BASE_DIR / "index.html"
 TAIL_COUNT_DEFAULT = 50
 DEFAULT_TICK_DELAY = float(SIM_CONFIG.get("tick_delay", 0.5))
 
-streams = RedisStreams(url=_CONFIG.redis_url)
+streams = RedisStreams(url=config.redis_url)
 app = FastAPI(title="Sector Viz", version="0.1.0")
-API_URL = _CONFIG.api_url
+API_URL = config.api_url
 
 
 @app.get("/")
@@ -142,6 +130,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "services.viz_worker.main:app",
         host="0.0.0.0",
-        port=_CONFIG.port,
+        port=config.port,
         reload=False,
     )

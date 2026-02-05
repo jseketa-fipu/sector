@@ -1,8 +1,13 @@
-from dataclasses import dataclass
+from pydantic_settings import BaseSettings
+from pydantic import AnyUrl
+from pydantic import Field  # type: ignore
+from typing import Annotated
 
 
-@dataclass(frozen=True)
-class VizConfig:
-    redis_url: str | None
-    api_url: str
-    port: int
+class VisualizationWorkerSettings(BaseSettings):
+    redis_url: Annotated[
+        AnyUrl,
+        Field(validation_alias="REDIS_URL"),
+    ]
+    api_url: Annotated[AnyUrl, Field(validation_alias="API_URL")]
+    port: Annotated[int, Field(validation_alias="PORT")]
