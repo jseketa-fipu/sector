@@ -8,7 +8,7 @@ Visualization service serving the frontend and streaming snapshots/events.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+
 from pathlib import Path
 
 import uvicorn
@@ -22,12 +22,7 @@ from sector.infra.redis_streams import RedisStreams
 from sector.state_utils import snapshot_from_world
 from sector.world import create_sector
 
-
-@dataclass(frozen=True)
-class VizConfig:
-    redis_url: str | None
-    api_url: str
-    port: int
+from models import VizConfig
 
 
 def _load_config() -> VizConfig:
@@ -75,7 +70,9 @@ async def preview(seed: str):
     Generate a deterministic preview of the sector without touching the live sim.
     """
     world = create_sector(seed=seed)
-    snap = snapshot_from_world(world, tick_delay=DEFAULT_TICK_DELAY, include_ai_state=False)
+    snap = snapshot_from_world(
+        world, tick_delay=DEFAULT_TICK_DELAY, include_ai_state=False
+    )
     return snap
 
 
@@ -100,12 +97,16 @@ async def proxy_api(path: str, request: Request):
     if request.method == "OPTIONS":
         return Response(status_code=204)
 
-    req = urllib.request.Request(url, data=body or None, headers=headers, method=request.method)
+    req = urllib.request.Request(
+        url, data=body or None, headers=headers, method=request.method
+    )
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
             payload = resp.read()
             content_type = resp.headers.get("Content-Type", "application/json")
-            return Response(content=payload, status_code=resp.status, media_type=content_type)
+            return Response(
+                content=payload, status_code=resp.status, media_type=content_type
+            )
     except urllib.error.HTTPError as exc:
         payload = exc.read()
         content_type = exc.headers.get("Content-Type", "application/json")
@@ -121,7 +122,9 @@ async def ws(ws: WebSocket):
     last_id = "$"
     try:
         while True:
-            entries = await streams.read_events(last_id=last_id, count=200, block_ms=500)
+            entries = await streams.read_events(
+                last_id=last_id, count=200, block_ms=500
+            )
             if not entries:
                 # If no new events, send a keepalive snapshot to keep UI in sync.
                 snap = await streams.load_snapshot()
