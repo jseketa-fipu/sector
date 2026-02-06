@@ -1,33 +1,46 @@
 {
-  "num_systems": 50,
-  "lanes_per_system": 2,
-  "faction_count": 5,
+  "simulation_modifiers": {
+    "number_of_systems": 50,
+    "lanes_per_system": 2,
+    "faction_count": 5,
+    "tick_delay": 0.3,
+    "order_block_ms": 1,
+    "minimum_launch_strength": 3.0,
+    "damage_factor": 0.35,
+    "frontline_origin_bonus": 0.6,
+    "goal_path_bonus": 0.8,
+    "stagnation_ticks": 10
+  },
+  
   "faction_name_list": ["Empire", "Pirates", "Traders", "Mercenaries", "Synths"],
   "use_faction_count": true,
-  "tick_delay": 0.3,
+  
   "lease_ttl_ms": 60000,
-  "order_block_ms": 1,
-  "min_launch_strength": 3.0,
-  "damage_factor": 0.35,
-  "frontline_origin_bonus": 0.6,
-  "goal_path_bonus": 0.8,
-  "stagnation_ticks": 10,
-  "overextension_threshold": 15,
-  "overextension_risk_per_extra": 0.08,
-  "econ_overextension_penalty_per_extra": 0.04,
-  "econ_maturity_ticks": 15,
-  "econ_maturity_min_factor": 0.2,
-  "league_tech_bonus": 0.3,
-  "league_militia_strength": 6.0,
-  "colonizer_overextension_order_penalty": 0.1,
-  "colonizer_overextension_reserve_per_system": 1.5,
-  "capture_ticks": 3,
-  "min_capture_strength": 3.0,
-  "garrison_max_strength": 3.0,
-  "garrison_regen_per_tick": 0.1,
-  "auto_win_ratio": 8.0,
-  "defender_min_remaining": 3.0,
-  "defender_garrison_soak_factor": 0.8,
+  "overextension_modifiers": {
+      "threshold": 15,
+      "risk_per_extra_system": 0.08,
+      "economy_penalty_per_extra_system": 0.04,
+      "colonizer_order_penalty_per_extra_system": 0.1,
+      "colonizer_reserve_per_system": 1.5
+  },
+  "economy_modifiers": {
+      "maturity_ticks": 15,
+      "maturity_minimum_factor": 0.2
+  },
+  
+  "league_modifiers": {
+      "tech_bonus": 0.3,
+      "militia_strength": 6.0
+  },
+  "battle_modifiers": {
+      "capture_ticks": 3,
+      "minimum_capture_strength": 3.0,
+      "garrison_maximum_strength": 3.0,
+      "garrison_regeneration_per_tick": 0.1,
+      "auto_win_ratio": 8.0,
+      "defender_minimum_remaining": 3.0,
+      "defender_garrison_soak_factor": 0.8
+  },
   "colonizer_reserve_strength": 6.0,
   "colonizer_strength_per_order": 3.0,
   "special_systems": {
