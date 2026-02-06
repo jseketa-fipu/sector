@@ -26,7 +26,7 @@ config = VisualizationWorkerSettings()  # type: ignore[call-arg]
 BASE_DIR = Path(__file__).resolve().parent / "static"
 INDEX_PATH = BASE_DIR / "index.html"
 TAIL_COUNT_DEFAULT = 50
-DEFAULT_TICK_DELAY = float(SIM_CONFIG.get("tick_delay", 0.5))
+DEFAULT_TICK_DELAY = float(SIM_CONFIG.simulation_modifiers.tick_delay)
 
 streams = RedisStreams(url=config.redis_url)
 app = FastAPI(title="Sector Viz", version="0.1.0")

@@ -10,16 +10,16 @@ from sector.config import SIM_CONFIG
 from sector.factions import load_factions
 
 # World-level config from JSON
-NUM_SYSTEMS: int = int(SIM_CONFIG.get("num_systems", 40))
-LANES_PER_SYSTEM: int = int(SIM_CONFIG.get("lanes_per_system", 3))
-MIN_SYSTEM_DISTANCE: float = float(SIM_CONFIG.get("min_system_distance", 0.05))
-MAX_PLACEMENT_ATTEMPTS: int = int(SIM_CONFIG.get("max_placement_attempts", 40))
+NUM_SYSTEMS: int = SIM_CONFIG.simulation_modifiers.number_of_systems
+LANES_PER_SYSTEM: int = SIM_CONFIG.simulation_modifiers.lanes_per_system
+MIN_SYSTEM_DISTANCE: float = SIM_CONFIG.simulation_modifiers.minimum_system_distance
+MAX_PLACEMENT_ATTEMPTS: int = SIM_CONFIG.simulation_modifiers.maximum_placement_attempts
 
 # Specials config
-SPECIAL_CFG = SIM_CONFIG.get("special_systems", {})
-NUM_RELIC = int(SPECIAL_CFG.get("relic", 0))
-NUM_FORGE = int(SPECIAL_CFG.get("forge", 0))
-NUM_HIVE = int(SPECIAL_CFG.get("hive", 0))
+SPECIAL_CFG = SIM_CONFIG.special_systems
+NUM_RELIC = SPECIAL_CFG.get("relic", 0)
+NUM_FORGE = SPECIAL_CFG.get("forge", 0)
+NUM_HIVE = SPECIAL_CFG.get("hive", 0)
 
 # Faction IDs and names from JSON
 FACTION_CONFIG: Dict[str, dict] = load_factions(SIM_CONFIG)
@@ -33,16 +33,26 @@ REBELLION_CHANCE = 0.25  # 25% chance when under threshold
 NEW_FACTION_CHANCE = 0.2  # 20% of rebellions join/create a rebel faction
 UPKEEP_IDLE = 0.01  # per-tick idle fleet upkeep (drain)
 OVEREXTENSION_THRESHOLD = int(SIM_CONFIG.get("overextension_threshold", 15))
-OVEREXTENSION_RISK_PER_EXTRA = float(SIM_CONFIG.get("overextension_risk_per_extra", 0.02))
-ECON_OVEREXT_PENALTY_PER_EXTRA = float(SIM_CONFIG.get("econ_overextension_penalty_per_extra", 0.04))
+OVEREXTENSION_RISK_PER_EXTRA = float(
+    SIM_CONFIG.get("overextension_risk_per_extra", 0.02)
+)
+ECON_OVEREXT_PENALTY_PER_EXTRA = float(
+    SIM_CONFIG.get("econ_overextension_penalty_per_extra", 0.04)
+)
 ECON_MATURITY_TICKS = int(SIM_CONFIG.get("econ_maturity_ticks", 15))
 ECON_MATURITY_MIN_FACTOR = float(SIM_CONFIG.get("econ_maturity_min_factor", 0.2))
 LEAGUE_FACTION_ID = "L"
 LEAGUE_TECH_BONUS = float(SIM_CONFIG.get("league_tech_bonus", 0.3))
 LEAGUE_MILITIA_STRENGTH = float(SIM_CONFIG.get("league_militia_strength", 6.0))
-CAPTURE_TICKS = int(SIM_CONFIG.get("capture_ticks", 3))  # ticks required to flip undefended system
-MIN_CAPTURE_STRENGTH = float(SIM_CONFIG.get("min_capture_strength", 3.0))  # min idle strength to capture
-GARRISON_MAX = float(SIM_CONFIG.get("garrison_max_strength", 3.0))  # max passive home guard
+CAPTURE_TICKS = int(
+    SIM_CONFIG.get("capture_ticks", 3)
+)  # ticks required to flip undefended system
+MIN_CAPTURE_STRENGTH = float(
+    SIM_CONFIG.get("min_capture_strength", 3.0)
+)  # min idle strength to capture
+GARRISON_MAX = float(
+    SIM_CONFIG.get("garrison_max_strength", 3.0)
+)  # max passive home guard
 GARRISON_REGEN = float(SIM_CONFIG.get("garrison_regen_per_tick", 0.2))  # regen per tick
 
 # Optional deterministic seed for sector generation
@@ -58,7 +68,9 @@ DAMAGE_FACTOR = float(SIM_CONFIG.get("damage_factor", 0.7))
 MIN_LAUNCH_STRENGTH = float(SIM_CONFIG.get("min_launch_strength", 1.0))
 AUTO_WIN_RATIO = float(SIM_CONFIG.get("auto_win_ratio", 4.0))
 DEFENDER_MIN_REMAINING = float(SIM_CONFIG.get("defender_min_remaining", 1.0))
-DEFENDER_GARRISON_SOAK_FACTOR = float(SIM_CONFIG.get("defender_garrison_soak_factor", 0.0))
+DEFENDER_GARRISON_SOAK_FACTOR = float(
+    SIM_CONFIG.get("defender_garrison_soak_factor", 0.0)
+)
 
 
 @dataclass
@@ -196,7 +208,9 @@ def create_sector(num_systems: int = NUM_SYSTEMS, seed: Optional[int] = None) ->
             y = rng.random()
         positions.append((x, y))
         value = rng.randint(1, 10)
-        systems[i] = StarSystem(id=i, x=x, y=y, value=value, econ_maturity=ECON_MATURITY_TICKS)
+        systems[i] = StarSystem(
+            id=i, x=x, y=y, value=value, econ_maturity=ECON_MATURITY_TICKS
+        )
 
     # Lanes: connect each system to LANES_PER_SYSTEM nearest neighbors
     lane_set = set()
@@ -344,7 +358,9 @@ def _system_econ_value(sys: StarSystem) -> float:
     # Stability matters: unstable worlds don't contribute fully
     stability_factor = 0.5 + 0.5 * sys.stability
     maturity = min(1.0, sys.econ_maturity / float(max(1, ECON_MATURITY_TICKS)))
-    maturity_factor = ECON_MATURITY_MIN_FACTOR + (1.0 - ECON_MATURITY_MIN_FACTOR) * maturity
+    maturity_factor = (
+        ECON_MATURITY_MIN_FACTOR + (1.0 - ECON_MATURITY_MIN_FACTOR) * maturity
+    )
     return base * stability_factor * maturity_factor
 
 
@@ -413,7 +429,9 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
             return f"hive world #{sys.id}"
         return f"system #{sys.id}"
 
-    def log_event(kind: str, systems_ids: List[int], factions_ids: List[str], text: str):
+    def log_event(
+        kind: str, systems_ids: List[int], factions_ids: List[str], text: str
+    ):
         events.append(text)
         history.append(
             HistoricalEvent(
@@ -431,7 +449,10 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
         - either becomes independent (owner None)
         - or (rarely) spawns / joins a rebel faction (splinter state).
         """
-        from sector.puppet import register_new_faction, ensure_league_faction  # late import to avoid cyclic import
+        from sector.puppet import (
+            register_new_faction,
+            ensure_league_faction,
+        )  # late import to avoid cyclic import
 
         if sys.owner is None:
             return
@@ -481,14 +502,16 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
                 enroute_to=None,
                 eta=0,
             )
-            world.faction_build_stock[LEAGUE_FACTION_ID] = world.faction_build_stock.get(
-                LEAGUE_FACTION_ID, 0.0
+            world.faction_build_stock[LEAGUE_FACTION_ID] = (
+                world.faction_build_stock.get(LEAGUE_FACTION_ID, 0.0)
             )
             text = (
                 f"t={world.tick}: Rebellion in {describe_system(sys)}! "
                 f"{FACTION_NAMES[old_owner]} lost control; the world joined the {FACTION_NAMES[LEAGUE_FACTION_ID]}."
             )
-            log_event("rebellion_independence", [sys.id], [old_owner, LEAGUE_FACTION_ID], text)
+            log_event(
+                "rebellion_independence", [sys.id], [old_owner, LEAGUE_FACTION_ID], text
+            )
         else:
             # A minority actually form / join a rebel faction
             new_fid = register_new_faction(old_owner, base_label)
@@ -513,7 +536,9 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
                 eta=0,
             )
             # seed some build stock so they can reinforce soon
-            world.faction_build_stock[new_fid] = world.faction_build_stock.get(new_fid, 0.0) + BUILD_COST
+            world.faction_build_stock[new_fid] = (
+                world.faction_build_stock.get(new_fid, 0.0) + BUILD_COST
+            )
             text = (
                 f"t={world.tick}: Secession in {describe_system(sys)}! "
                 f"A splinter of {FACTION_NAMES[old_owner]} joined the rebel faction "
@@ -551,9 +576,13 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
             target_sys.occupation_faction = None
             target_sys.occupation_progress = 0
             target_sys.unrest = min(1.0, target_sys.unrest + 0.25)
-            target_sys.stability = max(0.0, target_sys.stability - 0.05 - 0.1 * target_sys.unrest)
+            target_sys.stability = max(
+                0.0, target_sys.stability - 0.05 - 0.1 * target_sys.unrest
+            )
             target_sys.heat = min(3.0, target_sys.heat + 1.5)
-            target_sys.garrison = min(GARRISON_MAX, target_sys.garrison + 0.5 * GARRISON_MAX)
+            target_sys.garrison = min(
+                GARRISON_MAX, target_sys.garrison + 0.5 * GARRISON_MAX
+            )
             target_sys.econ_maturity = 0
 
             expansions.setdefault(attacker_faction, 0)
@@ -568,7 +597,9 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
                 f"t={world.tick}: Fleet of {FACTION_NAMES[attacker_faction]} secured "
                 f"{describe_system(target_sys)} {'via rapid occupation' if instantly else 'after occupation.'}"
             )
-            log_event("fleet_capture_no_defense", [target_sys.id], [attacker_faction], text)
+            log_event(
+                "fleet_capture_no_defense", [target_sys.id], [attacker_faction], text
+            )
             highlight_ids.add(target_sys.id)
             check_rebellion(target_sys)
 
@@ -619,7 +650,9 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
                     0.0, target_sys.stability - 0.05 - 0.1 * target_sys.unrest
                 )
                 target_sys.heat = min(3.0, target_sys.heat + 1.5)
-                target_sys.garrison = min(GARRISON_MAX, target_sys.garrison + 0.5 * GARRISON_MAX)
+                target_sys.garrison = min(
+                    GARRISON_MAX, target_sys.garrison + 0.5 * GARRISON_MAX
+                )
                 target_sys.econ_maturity = 0
 
                 _complete_capture()
@@ -658,8 +691,12 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
         elif effective_defense >= attack_power * AUTO_WIN_RATIO:
             attacker_wins = False
         else:
-            local_adv = (attack_power - effective_defense) / (attack_power + effective_defense)
-            defender_home_bonus = 0.05 if def_owner is not None and target_sys.owner == def_owner else 0.0
+            local_adv = (attack_power - effective_defense) / (
+                attack_power + effective_defense
+            )
+            defender_home_bonus = (
+                0.05 if def_owner is not None and target_sys.owner == def_owner else 0.0
+            )
             p_attack_wins = base + 0.3 * local_adv - defender_home_bonus
             if target_sys.reclaim_cooldown > 0:
                 p_attack_wins -= 0.15  # defending rebels get a brief edge
@@ -703,15 +740,26 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
                 f"t={world.tick}: Fleet of {FACTION_NAMES[attacker_faction]} won a battle in "
                 f"{describe_system(target_sys)} (local odds {p_attack_wins:.2f}) and took control."
             )
-            log_event("fleet_battle_win", [target_sys.id], [attacker_faction] + list(defender_factions), text)
+            log_event(
+                "fleet_battle_win",
+                [target_sys.id],
+                [attacker_faction] + list(defender_factions),
+                text,
+            )
             highlight_ids.add(target_sys.id)
         else:
             total_losers = base_attack
             effective_attack = total_losers
-            if def_owner is not None and target_sys.owner == def_owner and target_sys.garrison > 0:
+            if (
+                def_owner is not None
+                and target_sys.owner == def_owner
+                and target_sys.garrison > 0
+            ):
                 garrison_soak = target_sys.garrison * DEFENDER_GARRISON_SOAK_FACTOR
                 effective_attack = max(0.0, effective_attack - garrison_soak)
-            remaining = max(DEFENDER_MIN_REMAINING, base_defense - DAMAGE_FACTOR * effective_attack)
+            remaining = max(
+                DEFENDER_MIN_REMAINING, base_defense - DAMAGE_FACTOR * effective_attack
+            )
             target_sys.garrison = max(0.0, target_sys.garrison - base_attack)
 
             for fl in attackers_here:
@@ -737,7 +785,12 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
                 f"t={world.tick}: Fleet of {FACTION_NAMES[attacker_faction]} failed to take "
                 f"{describe_system(target_sys)} (local odds {p_attack_wins:.2f})."
             )
-            log_event("fleet_battle_lose", [target_sys.id], [attacker_faction] + list(defender_factions), text)
+            log_event(
+                "fleet_battle_lose",
+                [target_sys.id],
+                [attacker_faction] + list(defender_factions),
+                text,
+            )
             highlight_ids.add(target_sys.id)
 
         check_rebellion(target_sys)
@@ -778,7 +831,9 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
             continue
         strength_by_owner: Dict[str, float] = {}
         for fl in fleets_here:
-            strength_by_owner[fl.owner] = strength_by_owner.get(fl.owner, 0.0) + fl.strength
+            strength_by_owner[fl.owner] = (
+                strength_by_owner.get(fl.owner, 0.0) + fl.strength
+            )
         attacker = max(strength_by_owner.items(), key=lambda kv: kv[1])[0]
         resolve_system_conflict(sys_id, attacker, fleets_here)
 
@@ -788,7 +843,10 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
         # decay occupation if no occupying fleets remain
         if sys.occupation_faction:
             occupying_present = any(
-                fl.owner == sys.occupation_faction and fl.system_id == sys.id and fl.strength > 0 and fl.eta == 0
+                fl.owner == sys.occupation_faction
+                and fl.system_id == sys.id
+                and fl.strength > 0
+                and fl.eta == 0
                 for fl in world.fleets.values()
             )
             if not occupying_present:
@@ -798,7 +856,8 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
         if sys.owner is not None or sys.reclaim_cooldown > 0:
             continue
         fleets_here = [
-            fl for fl in world.fleets.values()
+            fl
+            for fl in world.fleets.values()
             if fl.system_id == sys.id and fl.strength > 0 and fl.eta == 0
         ]
         if not fleets_here:
@@ -807,12 +866,16 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
         # Pick faction with highest total strength; if tie, leave contested.
         strength_by_owner: Dict[str, float] = {}
         for fl in fleets_here:
-            strength_by_owner[fl.owner] = strength_by_owner.get(fl.owner, 0.0) + fl.strength
+            strength_by_owner[fl.owner] = (
+                strength_by_owner.get(fl.owner, 0.0) + fl.strength
+            )
 
         if not strength_by_owner:
             continue
 
-        sorted_strength = sorted(strength_by_owner.items(), key=lambda kv: kv[1], reverse=True)
+        sorted_strength = sorted(
+            strength_by_owner.items(), key=lambda kv: kv[1], reverse=True
+        )
         if len(sorted_strength) > 1 and sorted_strength[0][1] == sorted_strength[1][1]:
             # contested tie; do nothing this tick
             continue
@@ -882,7 +945,10 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
         return [
             fl
             for fl in world.fleets.values()
-            if fl.owner == faction and fl.system_id == system_id and fl.strength > 0 and fl.eta == 0
+            if fl.owner == faction
+            and fl.system_id == system_id
+            and fl.strength > 0
+            and fl.eta == 0
         ]
 
     for (attacker, origin_id), origin_orders in orders_by_origin.items():
@@ -924,7 +990,9 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
             fleet.eta = TRAVEL_TICKS
             continue
 
-        idle_sorted = [fl for fl in sorted(idle, key=lambda fl: fl.strength, reverse=True)]
+        idle_sorted = [
+            fl for fl in sorted(idle, key=lambda fl: fl.strength, reverse=True)
+        ]
         orders_to_run = origin_orders[:]
         for order in orders_to_run:
             if not idle_sorted:
@@ -958,7 +1026,7 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
 
         # upkeep drain to discourage hoarding idle fleets
         if fl.eta == 0:
-            fl.strength *= (1.0 - UPKEEP_IDLE)
+            fl.strength *= 1.0 - UPKEEP_IDLE
 
         if fl.strength <= 0.0:
             to_delete.append(fid)
@@ -983,7 +1051,9 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
             continue
         primary = merged[key]
         primary.strength += fl.strength
-        primary.max_strength = max(primary.max_strength, fl.max_strength, primary.strength)
+        primary.max_strength = max(
+            primary.max_strength, fl.max_strength, primary.strength
+        )
         to_remove.append(fid)
     for fid in to_remove:
         del world.fleets[fid]

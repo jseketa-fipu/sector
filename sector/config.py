@@ -42,6 +42,8 @@ class LeagueModifiers(BaseModel):
 class SimulationModifiers(BaseModel):
     number_of_systems: PositiveInt
     lanes_per_system: PositiveInt
+    minimum_system_distance: PositiveFloat
+    maximum_placement_attempts: PositiveInt
     faction_count: PositiveInt
     tick_delay: PositiveFloat
     order_block_ms: PositiveInt

@@ -2,6 +2,8 @@
   "simulation_modifiers": {
     "number_of_systems": 50,
     "lanes_per_system": 2,
+    "minimum_system_distance": 0.05,
+    "maximum_placement_attempts": 40,
     "faction_count": 5,
     "tick_delay": 0.3,
     "order_block_ms": 1,
