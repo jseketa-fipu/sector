@@ -33,49 +33,38 @@ FACTION_NAMES: Dict[str, str] = {
 }
 
 # Rebellion tuning
-REBELLION_STABILITY_THRESHOLD = 0.08  # only VERY unstable worlds can revolt
-REBELLION_CHANCE = 0.25  # 25% chance when under threshold
-NEW_FACTION_CHANCE = 0.2  # 20% of rebellions join/create a rebel faction
-UPKEEP_IDLE = 0.01  # per-tick idle fleet upkeep (drain)
+REBELLION_STABILITY_THRESHOLD = SIM_CONFIG.world_tuning.rebellion_stability_threshold  # only VERY unstable worlds can revolt
+REBELLION_CHANCE = SIM_CONFIG.world_tuning.rebellion_chance  # chance when under threshold
+NEW_FACTION_CHANCE = SIM_CONFIG.world_tuning.new_faction_chance  # fraction of rebellions that spawn a new faction
+UPKEEP_IDLE = SIM_CONFIG.world_tuning.upkeep_idle  # per-tick idle fleet upkeep (drain)
 OVEREXTENSION_THRESHOLD = SIM_CONFIG.overextension_modifiers.threshold
 OVEREXTENSION_RISK_PER_EXTRA = SIM_CONFIG.overextension_modifiers.risk_per_extra_system
-ECON_OVEREXT_PENALTY_PER_EXTRA = (
-    SIM_CONFIG.overextension_modifiers.economy_penalty_per_extra_system
-)
+ECON_OVEREXT_PENALTY_PER_EXTRA = SIM_CONFIG.overextension_modifiers.economy_penalty_per_extra_system
 ECON_MATURITY_TICKS = SIM_CONFIG.economy_modifiers.maturity_ticks
 ECON_MATURITY_MIN_FACTOR = SIM_CONFIG.economy_modifiers.maturity_minimum_factor
-LEAGUE_FACTION_ID = "L"
+LEAGUE_FACTION_ID = SIM_CONFIG.world_tuning.league_faction_id
 LEAGUE_TECH_BONUS = SIM_CONFIG.league_modifiers.tech_bonus
 LEAGUE_MILITIA_STRENGTH = SIM_CONFIG.league_modifiers.militia_strength
-CAPTURE_TICKS = (
-    SIM_CONFIG.battle_modifiers.capture_ticks
-)  # ticks required to flip undefended system
-MIN_CAPTURE_STRENGTH = (
-    SIM_CONFIG.battle_modifiers.minimum_capture_strength
-)  # min idle strength to capture
-GARRISON_MAX = (
-    SIM_CONFIG.battle_modifiers.garrison_maximum_strength
-)  # max passive home guard
-GARRISON_REGEN = (
-    SIM_CONFIG.battle_modifiers.garrison_regeneration_per_tick
-)  # regen per tick
+CAPTURE_TICKS = SIM_CONFIG.battle_modifiers.capture_ticks  # ticks required to flip undefended system
+MIN_CAPTURE_STRENGTH = SIM_CONFIG.battle_modifiers.minimum_capture_strength
+# min idle strength to capture
+GARRISON_MAX = SIM_CONFIG.battle_modifiers.garrison_maximum_strength  # max passive home guard
+GARRISON_REGEN = SIM_CONFIG.battle_modifiers.garrison_regeneration_per_tick  # regen per tick
 
 # Optional deterministic seed for sector generation
 RAW_SECTOR_SEED = SIM_CONFIG.sector_seed
 
 # Fleet travel config
-TRAVEL_TICKS = 2  # movement duration between neighboring systems
-BUILD_RATE = 0.005  # econ -> build stock per tick
-BUILD_COST = 5.0  # stock needed for a small fleet
-NEW_FLEET_STRENGTH = 5.0
-REPAIR_RATE = 0.02
+TRAVEL_TICKS = SIM_CONFIG.world_tuning.travel_ticks  # movement duration between neighboring systems
+BUILD_RATE = SIM_CONFIG.world_tuning.build_rate  # econ -> build stock per tick
+BUILD_COST = SIM_CONFIG.world_tuning.build_cost  # stock needed for a small fleet
+NEW_FLEET_STRENGTH = SIM_CONFIG.world_tuning.new_fleet_strength
+REPAIR_RATE = SIM_CONFIG.world_tuning.repair_rate
 DAMAGE_FACTOR = SIM_CONFIG.simulation_modifiers.damage_factor
 MIN_LAUNCH_STRENGTH = SIM_CONFIG.simulation_modifiers.minimum_launch_strength
 AUTO_WIN_RATIO = SIM_CONFIG.battle_modifiers.auto_win_ratio
 DEFENDER_MIN_REMAINING = SIM_CONFIG.battle_modifiers.defender_minimum_remaining
-DEFENDER_GARRISON_SOAK_FACTOR = (
-    SIM_CONFIG.battle_modifiers.defender_garrison_soak_factor
-)
+DEFENDER_GARRISON_SOAK_FACTOR = SIM_CONFIG.battle_modifiers.defender_garrison_soak_factor
 
 
 # ---------- Sector generation ----------

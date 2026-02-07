@@ -341,6 +341,17 @@
       font: 12px var(--font-mono);
       flex: 1;
     }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      font: 12px var(--font-mono);
+      color: var(--muted);
+    }
+    .check-row input {
+      accent-color: var(--accent);
+    }
     canvas { display: block; touch-action: none; }
     @keyframes panelFloat {
       from { opacity: 0; transform: translateY(10px); }
@@ -378,6 +389,10 @@
           <button class="btn" id="restart-sim">New Map</button>
           <button class="btn" id="logout" type="button">Logout</button>
         </div>
+        <label class="check-row">
+          <input type="checkbox" id="bot-only-toggle" />
+          Bot run only
+        </label>
       </div>
     </div>
     <div class="panel" data-panel="status">
@@ -455,6 +470,7 @@
     const signInBtn = document.getElementById("sign-in");
     const restartBtn = document.getElementById("restart-sim");
     const startBtn = document.getElementById("start-sim");
+    const botOnlyToggle = document.getElementById("bot-only-toggle");
     const togglePanelsBtn = document.getElementById("toggle-panels");
     const logoutBtn = document.getElementById("logout");
     const statusPlayerEl = document.getElementById("status-player");
@@ -543,6 +559,18 @@
 
     if (startBtn) {
       startBtn.addEventListener("click", () => {
+        if (botOnlyToggle && botOnlyToggle.checked) {
+          apiFetch("/admin/bots-only", { method: "POST" })
+            .then(() => {
+              setSelectedFaction(null);
+              setPreviewFaction(null);
+              refreshPlayer().then(refreshFactions).catch(() => {});
+              showNotice("Bots-only run started.");
+              setTimeout(hideNotice, 1500);
+            })
+            .catch(err => showNotice(err.message));
+          return;
+        }
         if (!selectedFactionId) {
           showNotice("Click a faction to select it.");
           return;
@@ -673,6 +701,15 @@
         seedInputDirty = true;
       });
     }
+    if (botOnlyToggle) {
+      botOnlyToggle.addEventListener("change", () => {
+        if (botOnlyToggle.checked) {
+          setSelectedFaction(null);
+          setPreviewFaction(null);
+        }
+        updateAuthControls();
+      });
+    }
 
     const basePathHint = "/";
     const apiParam = params.get("api");
@@ -745,7 +782,10 @@
       const signedIn = !!authToken;
       if (restartBtn) restartBtn.disabled = !signedIn;
       if (startBtn) {
-        const canStart = signedIn && !playerFaction && selectedFactionId && openFactions.has(selectedFactionId);
+        const wantsBotsOnly = !!(botOnlyToggle && botOnlyToggle.checked);
+        const canStart = wantsBotsOnly
+          ? signedIn
+          : (signedIn && !playerFaction && selectedFactionId && openFactions.has(selectedFactionId));
         startBtn.disabled = !canStart;
       }
     }

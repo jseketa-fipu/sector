@@ -70,6 +70,19 @@ class BattleModifiers(BaseModel):
     defender_garrison_soak_factor: PositiveFloat
 
 
+class WorldTuning(BaseModel):
+    rebellion_stability_threshold: PositiveFloat
+    rebellion_chance: PositiveFloat
+    new_faction_chance: PositiveFloat
+    upkeep_idle: PositiveFloat
+    travel_ticks: PositiveInt
+    build_rate: PositiveFloat
+    build_cost: PositiveFloat
+    new_fleet_strength: PositiveFloat
+    repair_rate: PositiveFloat
+    league_faction_id: str
+
+
 class SimulationSettings(BaseModel):
     simulation_modifiers: SimulationModifiers
     faction_name_list: Annotated[List[str], Field(default_factory=List)]
@@ -78,6 +91,7 @@ class SimulationSettings(BaseModel):
 
     lease_ttl_ms: PositiveInt
 
+    world_tuning: WorldTuning
     overextension_modifiers: OverextensionModifiers
     economy_modifiers: EconomyModifiers
     league_modifiers: LeagueModifiers
@@ -100,4 +114,3 @@ _CONFIG_PATH = _BASE_DIR / "config" / "sim_config.json"
 SIM_CONFIG = SimulationSettings.model_validate_json(
     _CONFIG_PATH.read_text(encoding="utf-8")
 )
-print(SIM_CONFIG.model_dump_json())

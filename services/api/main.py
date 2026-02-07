@@ -35,6 +35,7 @@ class ApiConfig:
     player_faction_prefix: str
     faction_player_prefix: str
     restart_key: str
+    bots_only_key: str
     port: int
 
 
@@ -62,6 +63,7 @@ def _load_config() -> ApiConfig:
             "FACTION_PLAYER_PREFIX", "sector:faction:player"
         ),
         restart_key=os.environ.get("RESTART_KEY", "sector:restart"),
+        bots_only_key=os.environ.get("BOTS_ONLY_KEY", "sector:bots_only"),
         port=int(os.environ.get("PORT", "8000")),
     )
 
@@ -105,6 +107,19 @@ async def _get_player_faction(universe_id: str, address: str) -> str | None:
     return await streams.client.get(
         f"{_CONFIG.player_faction_prefix}:{universe_id}:{address}"
     )
+
+
+async def _clear_faction_claims(universe_id: str) -> None:
+    faction_pattern = f"{_CONFIG.faction_player_prefix}:{universe_id}:*"
+    player_pattern = f"{_CONFIG.player_faction_prefix}:{universe_id}:*"
+    keys: list[str] = []
+    async for key in streams.client.scan_iter(match=faction_pattern):
+        keys.append(key)
+    async for key in streams.client.scan_iter(match=player_pattern):
+        keys.append(key)
+    if keys:
+        await streams.client.delete(*keys)
+    await streams.client.delete(f"{_CONFIG.human_factions_key}:{universe_id}")
 
 
 async def _filter_bot_orders(
@@ -385,6 +400,19 @@ async def restart_sim(
     else:
         await streams.client.set(_CONFIG.restart_key, str(new_universe), ex=30)
     return {"status": "queued", "universe_id": str(new_universe)}
+
+
+@app.post("/admin/bots-only")
+async def bots_only(
+    player: dict = Depends(_get_current_player),
+) -> Dict[str, str]:
+    """
+    Clear any human faction claims so the run is bots-only.
+    """
+    universe_id = await _get_universe_id()
+    await _clear_faction_claims(universe_id)
+    await streams.client.set(f"{_CONFIG.bots_only_key}:{universe_id}", "1")
+    return {"status": "ok", "universe_id": universe_id}
 
 
 if __name__ == "__main__":

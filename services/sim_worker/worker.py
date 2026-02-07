@@ -39,6 +39,7 @@ class WorkerConfig:
     universe_key: str
     human_factions_key: str
     restart_key: str
+    bots_only_key: str
     reset_universe_on_start: bool
     order_group: str
     order_consumer: str
@@ -73,6 +74,7 @@ def _load_config() -> WorkerConfig:
         universe_key=os.environ.get("UNIVERSE_KEY", "sector:universe_id"),
         human_factions_key=os.environ.get("HUMAN_FACTIONS_KEY", "sector:human_factions"),
         restart_key=os.environ.get("RESTART_KEY", "sector:restart"),
+        bots_only_key=os.environ.get("BOTS_ONLY_KEY", "sector:bots_only"),
         reset_universe_on_start=os.environ.get("RESET_UNIVERSE_ON_START", "true")
         .lower()
         == "true",
@@ -283,6 +285,11 @@ class SimulationWorker:
             f"{_CONFIG.human_factions_key}:{universe_id}"
         )
         return set(factions or [])
+
+    async def _bots_only_enabled(self) -> bool:
+        universe_id = await self._ensure_universe_id()
+        key = f"{_CONFIG.bots_only_key}:{universe_id}"
+        return bool(await self.streams.client.get(key))
 
     async def _ensure_initial_snapshot(self) -> None:
         if self._last_frame is not None:
@@ -594,7 +601,8 @@ class SimulationWorker:
                     continue
 
                 human_factions = await self._get_human_factions()
-                if not human_factions and self.world.tick == 0:
+                bots_only = await self._bots_only_enabled()
+                if not human_factions and self.world.tick == 0 and not bots_only:
                     await self._ensure_initial_snapshot()
                     await asyncio.sleep(1)
                     continue

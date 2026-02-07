@@ -1,6 +1,6 @@
 {
   "simulation_modifiers": {
-    "number_of_systems": 5,
+    "number_of_systems": 30,
     "lanes_per_system": 3,
     "minimum_system_distance": 0.05,
     "maximum_lane_length": 0.30,
@@ -25,6 +25,18 @@
   "sector_seed": null,
   
   "lease_ttl_ms": 60000,
+  "world_tuning": {
+    "rebellion_stability_threshold": 0.08,
+    "rebellion_chance": 0.25,
+    "new_faction_chance": 0.2,
+    "upkeep_idle": 0.01,
+    "travel_ticks": 2,
+    "build_rate": 0.005,
+    "build_cost": 5.0,
+    "new_fleet_strength": 5.0,
+    "repair_rate": 0.02,
+    "league_faction_id": "L"
+  },
   "overextension_modifiers": {
       "threshold": 15,
       "risk_per_extra_system": 0.08,
