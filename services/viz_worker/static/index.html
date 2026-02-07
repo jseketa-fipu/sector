@@ -562,8 +562,10 @@
         if (botOnlyToggle && botOnlyToggle.checked) {
           apiFetch("/admin/bots-only", { method: "POST" })
             .then(() => {
+              botsOnlyActive = true;
               setSelectedFaction(null);
               setPreviewFaction(null);
+              setUiStage("game");
               refreshPlayer().then(refreshFactions).catch(() => {});
               showNotice("Bots-only run started.");
               setTimeout(hideNotice, 1500);
@@ -688,6 +690,7 @@
     const MAX_ZOOM = 3.5;
     const camera = { scale: 1, x: 0, y: 0 };
     let uiStage = "auth";
+    let botsOnlyActive = false;
     let previewFactionId = null;
     let selectedFactionId = null;
     let openFactions = new Set();
@@ -741,6 +744,10 @@
     function setStatusPlayer(text) {
       if (!statusPlayerEl) return;
       statusPlayerEl.textContent = text;
+    }
+    function updateStatusPlayerLabel() {
+      const label = playerFaction ? (lastFactionNames[playerFaction] || playerFaction) : "—";
+      setStatusPlayer(`Faction: ${label}`);
     }
 
     function updateAuthStatus() {
@@ -898,6 +905,7 @@
       if (!authToken) {
         setPlayerStatus("Not signed in.");
         playerFaction = null;
+        botsOnlyActive = false;
         setUiStage("auth");
         setStatusPlayer("Faction: —");
         setLogoutVisible(false);
@@ -924,11 +932,10 @@
       playerFaction = me.faction || null;
       universeId = me.universe_id || null;
       updateAuthStatus();
-      const label = playerFaction ? (lastFactionNames[playerFaction] || playerFaction) : "—";
-      setStatusPlayer(`Faction: ${label}`);
+      updateStatusPlayerLabel();
       setLogoutVisible(true);
       updateAuthControls();
-      setUiStage(playerFaction ? "game" : "auth");
+      setUiStage((playerFaction || botsOnlyActive) ? "game" : "auth");
     }
 
     async function refreshFactions() {
@@ -1409,14 +1416,20 @@
     function updateHoverInfo(frame) {
       if (hoverSystemId === null) {
         hoverInfoText = "—";
+        updateStatusPlayerLabel();
         return;
       }
       const systems = frame.systems || [];
       const sys = systems.find(s => s.id === hoverSystemId);
       if (!sys) {
         hoverInfoText = "—";
+        updateStatusPlayerLabel();
         return;
       }
+      const ownerLabel = sys.owner
+        ? (lastFactionNames[sys.owner] || sys.owner)
+        : "—";
+      setStatusPlayer(`Faction: ${ownerLabel}`);
       const fleetsHere = (frame.fleets || []).filter(fl => fl.system_id === hoverSystemId && fl.eta === 0);
       if (!fleetsHere.length) {
         hoverInfoText = `#${hoverSystemId} empty`;
