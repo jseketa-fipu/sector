@@ -10,18 +10,13 @@ Provides a thin wrapper around redis.asyncio for:
 from __future__ import annotations
 
 import json
-import os
-from typing import Any, Iterable, List, Optional
+from typing import Any, Iterable, Optional
 
 from redis import asyncio as aioredis
 from redis.exceptions import ResponseError
 from pydantic import AnyUrl
 
-
-DEFAULT_REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-DEFAULT_EVENT_STREAM = os.environ.get("EVENT_STREAM", "sector:events")
-DEFAULT_ORDER_STREAM = os.environ.get("ORDER_STREAM", "sector:orders")
-DEFAULT_SNAPSHOT_KEY = os.environ.get("SNAPSHOT_KEY", "sector:snapshot")
+from sector.models import REDIS_SETTINGS
 
 
 class RedisStreams:
@@ -32,12 +27,12 @@ class RedisStreams:
         order_stream: str | None = None,
         snapshot_key: str | None = None,
     ) -> None:
-        self.url = url or DEFAULT_REDIS_URL
-        self.event_stream = event_stream or DEFAULT_EVENT_STREAM
-        self.order_stream = order_stream or DEFAULT_ORDER_STREAM
-        self.snapshot_key = snapshot_key or DEFAULT_SNAPSHOT_KEY
+        self.url = url or REDIS_SETTINGS.redis_url
+        self.event_stream = event_stream or REDIS_SETTINGS.event_stream
+        self.order_stream = order_stream or REDIS_SETTINGS.order_stream
+        self.snapshot_key = snapshot_key or REDIS_SETTINGS.snapshot_key
         # decode_responses=True so we deal with str, not bytes
-        self._redis = aioredis.from_url(self.url, decode_responses=True)
+        self._redis = aioredis.from_url(str(self.url), decode_responses=True)
 
     @property
     def client(self):

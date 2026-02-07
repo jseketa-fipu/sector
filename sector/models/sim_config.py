@@ -41,10 +41,12 @@ class LeagueModifiers(BaseModel):
 
 class SimulationModifiers(BaseModel):
     number_of_systems: PositiveInt
-    lanes_per_system: PositiveInt
+    lanes_per_system: Annotated[PositiveInt, Field(ge=2)]
     minimum_system_distance: PositiveFloat
+    maximum_lane_length: PositiveFloat
     maximum_placement_attempts: PositiveInt
     faction_count: PositiveInt
+    attempts_per_tick: PositiveInt
     tick_delay: PositiveFloat
     order_block_ms: PositiveInt
     minimum_launch_strength: PositiveFloat
@@ -52,6 +54,10 @@ class SimulationModifiers(BaseModel):
     frontline_origin_bonus: PositiveFloat
     goal_path_bonus: PositiveFloat
     stagnation_ticks: PositiveInt
+    max_reach_hops: PositiveInt
+    rally_min_strength: PositiveFloat
+    rally_max_orders: PositiveInt
+    max_dynamic_factions: PositiveInt
 
 
 class BattleModifiers(BaseModel):
@@ -68,6 +74,7 @@ class SimulationSettings(BaseModel):
     simulation_modifiers: SimulationModifiers
     faction_name_list: Annotated[List[str], Field(default_factory=List)]
     use_faction_count: bool
+    sector_seed: int | None
 
     lease_ttl_ms: PositiveInt
 
@@ -87,7 +94,7 @@ class SimulationSettings(BaseModel):
         return cls.model_validate(data)
 
 
-_BASE_DIR = Path(__file__).resolve().parent
+_BASE_DIR = Path(__file__).resolve().parents[1]
 _CONFIG_PATH = _BASE_DIR / "config" / "sim_config.json"
 
 SIM_CONFIG = SimulationSettings.model_validate_json(

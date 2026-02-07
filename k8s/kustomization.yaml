@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: sector-sim
 resources:
   - base/namespace.yaml
+  - base/redis-config.yaml
   - base/redis.yaml
   - base/bot-api-secret.yaml
   - base/api.yaml

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: sector-sim
+data:
+  REDIS_URL: redis://redis.sector-sim.svc.cluster.local:6379/0
+  EVENT_STREAM: sector:events
+  ORDER_STREAM: sector:orders
+  SNAPSHOT_KEY: sector:snapshot

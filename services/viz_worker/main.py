@@ -13,12 +13,12 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 import urllib.request
 import urllib.parse
 
-from sector.config import SIM_CONFIG
+from sector.models import SIM_CONFIG
+from sector.models import VisualizationWorkerSettings
+
 from sector.infra.redis_streams import RedisStreams
 from sector.state_utils import snapshot_from_world  # type: ignore
 from sector.world import create_sector
-
-from models import VisualizationWorkerSettings
 
 
 config = VisualizationWorkerSettings()  # type: ignore[call-arg]
@@ -30,7 +30,7 @@ DEFAULT_TICK_DELAY = float(SIM_CONFIG.simulation_modifiers.tick_delay)
 
 streams = RedisStreams(url=config.redis_url)
 app = FastAPI(title="Sector Viz", version="0.1.0")
-API_URL = config.api_url
+API_URL = str(config.api_url)
 
 
 @app.get("/")

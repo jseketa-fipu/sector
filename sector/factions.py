@@ -1,50 +1,44 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from typing import Dict, Any
+from itertools import cycle
+from typing import Dict
 
-def load_factions(sim_cfg: Dict[str, Any]) -> Dict[str, dict]:
+from sector.models.sim_config import SimulationSettings, FactionConfig
+
+
+def _dump_faction(cfg: FactionConfig) -> dict:
+    return cfg.model_dump()
+
+
+def load_factions(sim_cfg: SimulationSettings) -> Dict[str, dict]:
     """
-    Build the faction configuration from sim_config.
+    Build the faction configuration from the validated SimulationSettings model.
     Priority:
-    1) If "use_faction_count" is true, ignore explicit map and generate faction_count factions.
-    2) Else if "factions" map is provided and non-empty, use it as-is.
-    3) Else, if "faction_count" is provided, generate that many generic factions.
-    4) Fallback to five default factions if nothing specified.
+    1) If use_faction_count is true, generate faction_count factions using
+       faction_name_list and templates from the configured factions.
+    2) Else if factions map is provided and non-empty, use it as-is.
     """
-    force_count = str(sim_cfg.get("use_faction_count", False)).lower() == "true"
-    explicit = sim_cfg.get("factions", {}) or {}
-    if explicit and not force_count:
-        return dict(explicit)
+    explicit = sim_cfg.factions
+    if explicit and not sim_cfg.use_faction_count:
+        return {fid: _dump_faction(cfg) for fid, cfg in explicit.items()}
 
-    count = int(sim_cfg.get("faction_count", 5))
-    name_list = sim_cfg.get("faction_name_list") or sim_cfg.get("faction_names") or []
-    available_names = list(name_list) if isinstance(name_list, list) else []
-    palette = [
-        "#ff5555",
-        "#f1fa8c",
-        "#8be9fd",
-        "#a6e22e",
-        "#ff79c6",
-        "#7fffd4",
-        "#50fa7b",
-        "#bd93f9",
-        "#ffb86c",
-        "#c0c0c0",
-    ]
+    count = sim_cfg.simulation_modifiers.faction_count
+    names = list(sim_cfg.faction_name_list)
+    if len(names) < count:
+        raise ValueError(
+            "faction_name_list must contain at least faction_count names when use_faction_count is true"
+        )
+    if not explicit:
+        raise ValueError(
+            "factions must be provided as templates when use_faction_count is true"
+        )
+
+    templates = cycle(explicit.values())
     factions: Dict[str, dict] = {}
     for idx in range(count):
-        fid = f"F{idx+1}"
-        name = available_names.pop(0) if available_names else f"Faction {idx+1}"
-        factions[fid] = {
-            "name": name,
-            "base_attempts": sim_cfg.get("attempts_per_tick", 4),
-            "personality": {
-                "aggression": 0.5,
-                "expansionism": 0.5,
-                "greed": 0.5,
-                "caution": 0.5,
-            },
-            "color": palette[idx % len(palette)],
-        }
+        fid = f"F{idx + 1}"
+        cfg = _dump_faction(next(templates))
+        cfg["name"] = names[idx]
+        factions[fid] = cfg
     return factions

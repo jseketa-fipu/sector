@@ -1,21 +1,28 @@
 {
   "simulation_modifiers": {
-    "number_of_systems": 50,
-    "lanes_per_system": 2,
+    "number_of_systems": 5,
+    "lanes_per_system": 3,
     "minimum_system_distance": 0.05,
+    "maximum_lane_length": 0.30,
     "maximum_placement_attempts": 40,
     "faction_count": 5,
+    "attempts_per_tick": 4,
     "tick_delay": 0.3,
     "order_block_ms": 1,
     "minimum_launch_strength": 3.0,
     "damage_factor": 0.35,
     "frontline_origin_bonus": 0.6,
     "goal_path_bonus": 0.8,
-    "stagnation_ticks": 10
+    "stagnation_ticks": 10,
+    "max_reach_hops": 8,
+    "rally_min_strength": 10.0,
+    "rally_max_orders": 3,
+    "max_dynamic_factions": 6
   },
   
   "faction_name_list": ["Empire", "Pirates", "Traders", "Mercenaries", "Synths"],
   "use_faction_count": true,
+  "sector_seed": null,
   
   "lease_ttl_ms": 60000,
   "overextension_modifiers": {

@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import hashlib
 import random
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
-from sector.config import SIM_CONFIG
+import numpy as np
+from scipy.spatial import Delaunay
+
+from sector.models import SIM_CONFIG
+from sector.models import StarSystem, Fleet, HistoricalEvent, World, Order, TickSummary
+
 from sector.factions import load_factions
 
 # World-level config from JSON
@@ -14,17 +18,18 @@ NUM_SYSTEMS: int = SIM_CONFIG.simulation_modifiers.number_of_systems
 LANES_PER_SYSTEM: int = SIM_CONFIG.simulation_modifiers.lanes_per_system
 MIN_SYSTEM_DISTANCE: float = SIM_CONFIG.simulation_modifiers.minimum_system_distance
 MAX_PLACEMENT_ATTEMPTS: int = SIM_CONFIG.simulation_modifiers.maximum_placement_attempts
+MAX_LANE_LENGTH: float = SIM_CONFIG.simulation_modifiers.maximum_lane_length
 
 # Specials config
 SPECIAL_CFG = SIM_CONFIG.special_systems
-NUM_RELIC = SPECIAL_CFG.get("relic", 0)
-NUM_FORGE = SPECIAL_CFG.get("forge", 0)
-NUM_HIVE = SPECIAL_CFG.get("hive", 0)
+NUM_RELIC = SPECIAL_CFG["relic"]
+NUM_FORGE = SPECIAL_CFG["forge"]
+NUM_HIVE = SPECIAL_CFG["hive"]
 
 # Faction IDs and names from JSON
-FACTION_CONFIG: Dict[str, dict] = load_factions(SIM_CONFIG)
+FACTION_CONFIG: Dict[str, dict[str, Any]] = load_factions(SIM_CONFIG)
 FACTION_NAMES: Dict[str, str] = {
-    fid: fcfg.get("name", fid) for fid, fcfg in FACTION_CONFIG.items()
+    fid: fcfg["name"] for fid, fcfg in FACTION_CONFIG.items()
 }
 
 # Rebellion tuning
@@ -32,31 +37,31 @@ REBELLION_STABILITY_THRESHOLD = 0.08  # only VERY unstable worlds can revolt
 REBELLION_CHANCE = 0.25  # 25% chance when under threshold
 NEW_FACTION_CHANCE = 0.2  # 20% of rebellions join/create a rebel faction
 UPKEEP_IDLE = 0.01  # per-tick idle fleet upkeep (drain)
-OVEREXTENSION_THRESHOLD = int(SIM_CONFIG.get("overextension_threshold", 15))
-OVEREXTENSION_RISK_PER_EXTRA = float(
-    SIM_CONFIG.get("overextension_risk_per_extra", 0.02)
+OVEREXTENSION_THRESHOLD = SIM_CONFIG.overextension_modifiers.threshold
+OVEREXTENSION_RISK_PER_EXTRA = SIM_CONFIG.overextension_modifiers.risk_per_extra_system
+ECON_OVEREXT_PENALTY_PER_EXTRA = (
+    SIM_CONFIG.overextension_modifiers.economy_penalty_per_extra_system
 )
-ECON_OVEREXT_PENALTY_PER_EXTRA = float(
-    SIM_CONFIG.get("econ_overextension_penalty_per_extra", 0.04)
-)
-ECON_MATURITY_TICKS = int(SIM_CONFIG.get("econ_maturity_ticks", 15))
-ECON_MATURITY_MIN_FACTOR = float(SIM_CONFIG.get("econ_maturity_min_factor", 0.2))
+ECON_MATURITY_TICKS = SIM_CONFIG.economy_modifiers.maturity_ticks
+ECON_MATURITY_MIN_FACTOR = SIM_CONFIG.economy_modifiers.maturity_minimum_factor
 LEAGUE_FACTION_ID = "L"
-LEAGUE_TECH_BONUS = float(SIM_CONFIG.get("league_tech_bonus", 0.3))
-LEAGUE_MILITIA_STRENGTH = float(SIM_CONFIG.get("league_militia_strength", 6.0))
-CAPTURE_TICKS = int(
-    SIM_CONFIG.get("capture_ticks", 3)
+LEAGUE_TECH_BONUS = SIM_CONFIG.league_modifiers.tech_bonus
+LEAGUE_MILITIA_STRENGTH = SIM_CONFIG.league_modifiers.militia_strength
+CAPTURE_TICKS = (
+    SIM_CONFIG.battle_modifiers.capture_ticks
 )  # ticks required to flip undefended system
-MIN_CAPTURE_STRENGTH = float(
-    SIM_CONFIG.get("min_capture_strength", 3.0)
+MIN_CAPTURE_STRENGTH = (
+    SIM_CONFIG.battle_modifiers.minimum_capture_strength
 )  # min idle strength to capture
-GARRISON_MAX = float(
-    SIM_CONFIG.get("garrison_max_strength", 3.0)
+GARRISON_MAX = (
+    SIM_CONFIG.battle_modifiers.garrison_maximum_strength
 )  # max passive home guard
-GARRISON_REGEN = float(SIM_CONFIG.get("garrison_regen_per_tick", 0.2))  # regen per tick
+GARRISON_REGEN = (
+    SIM_CONFIG.battle_modifiers.garrison_regeneration_per_tick
+)  # regen per tick
 
 # Optional deterministic seed for sector generation
-RAW_SECTOR_SEED = SIM_CONFIG.get("sector_seed")
+RAW_SECTOR_SEED = SIM_CONFIG.sector_seed
 
 # Fleet travel config
 TRAVEL_TICKS = 2  # movement duration between neighboring systems
@@ -64,91 +69,13 @@ BUILD_RATE = 0.005  # econ -> build stock per tick
 BUILD_COST = 5.0  # stock needed for a small fleet
 NEW_FLEET_STRENGTH = 5.0
 REPAIR_RATE = 0.02
-DAMAGE_FACTOR = float(SIM_CONFIG.get("damage_factor", 0.7))
-MIN_LAUNCH_STRENGTH = float(SIM_CONFIG.get("min_launch_strength", 1.0))
-AUTO_WIN_RATIO = float(SIM_CONFIG.get("auto_win_ratio", 4.0))
-DEFENDER_MIN_REMAINING = float(SIM_CONFIG.get("defender_min_remaining", 1.0))
-DEFENDER_GARRISON_SOAK_FACTOR = float(
-    SIM_CONFIG.get("defender_garrison_soak_factor", 0.0)
+DAMAGE_FACTOR = SIM_CONFIG.simulation_modifiers.damage_factor
+MIN_LAUNCH_STRENGTH = SIM_CONFIG.simulation_modifiers.minimum_launch_strength
+AUTO_WIN_RATIO = SIM_CONFIG.battle_modifiers.auto_win_ratio
+DEFENDER_MIN_REMAINING = SIM_CONFIG.battle_modifiers.defender_minimum_remaining
+DEFENDER_GARRISON_SOAK_FACTOR = (
+    SIM_CONFIG.battle_modifiers.defender_garrison_soak_factor
 )
-
-
-@dataclass
-class StarSystem:
-    id: int
-    x: float  # normalized [0, 1]
-    y: float  # normalized [0, 1]
-    owner: Optional[str] = None  # faction id or None
-    neighbors: List[int] = field(default_factory=list)
-    value: int = 1  # resource / importance, 1–10
-    stability: float = 1.0  # 0..1, low = rebellion likely
-    kind: str = "normal"  # "normal" | "relic" | "forge" | "hive"
-    heat: float = 0.0  # recent conflict, for visuals
-    unrest: float = 0.0  # builds up on frequent ownership changes
-    reclaim_cooldown: int = 0  # ticks before auto-claim can occur after rebellion
-    occupation_faction: Optional[str] = None  # who is occupying
-    occupation_progress: int = 0  # ticks of continuous occupation
-    garrison: float = 0.0  # passive defense that regrows when owned
-    econ_maturity: int = 0  # ticks since owned (caps at ECON_MATURITY_TICKS)
-
-
-@dataclass
-class Fleet:
-    id: int
-    owner: str
-    system_id: Optional[int]  # None when enroute
-    strength: float
-    max_strength: float
-    experience: float = 0.0
-    enroute_from: Optional[int] = None
-    enroute_to: Optional[int] = None
-    eta: int = 0  # ticks remaining to arrival; 0 means idle at system
-
-
-@dataclass
-class HistoricalEvent:
-    tick: int
-    kind: str  # "expansion", "fleet_battle_win", "rebellion_*", ...
-    systems: List[int]
-    factions: List[str]
-    text: str
-
-
-@dataclass
-class World:
-    tick: int
-    systems: Dict[int, StarSystem]
-    lanes: List[Tuple[int, int]]
-    events: List[str]
-    last_event_systems: List[int] = field(default_factory=list)
-    history: List[HistoricalEvent] = field(default_factory=list)
-    generator_seed: Optional[int] = None
-
-    # Fleets & production
-    fleets: Dict[int, Fleet] = field(default_factory=dict)
-    next_fleet_id: int = 0
-    faction_build_stock: Dict[str, float] = field(default_factory=dict)
-
-
-@dataclass
-class Order:
-    """A generic order issued by a faction for this tick."""
-
-    faction: str  # e.g. "E", "P", "T"
-    origin_id: int  # system id issuing the order
-    target_id: int  # neighbor system id being targeted
-    reason: Optional[str] = None  # why this move was chosen (for history logging)
-    source: Optional[str] = None  # "human" | "bot" (set by API)
-    fleet_id: Optional[int] = None  # specific fleet id to move (optional)
-
-
-@dataclass
-class TickSummary:
-    """Aggregated outcome of a single tick, for AI adaptation."""
-
-    battles_won: Dict[str, int]
-    battles_lost: Dict[str, int]
-    expansions: Dict[str, int]
 
 
 # ---------- Sector generation ----------
@@ -212,70 +139,110 @@ def create_sector(num_systems: int = NUM_SYSTEMS, seed: Optional[int] = None) ->
             id=i, x=x, y=y, value=value, econ_maturity=ECON_MATURITY_TICKS
         )
 
-    # Lanes: connect each system to LANES_PER_SYSTEM nearest neighbors
-    lane_set = set()
+    # Lanes: build a connected graph with a hard max degree per system
+    lane_set: set[tuple[int, int]] = set()
     ids = list(systems.keys())
+    max_degree = LANES_PER_SYSTEM
+    if num_systems > 2 and max_degree < 2:
+        raise ValueError("LANES_PER_SYSTEM must be >= 2 to keep the graph connected.")
 
     def dist2(a: StarSystem, b: StarSystem) -> float:
         dx = a.x - b.x
         dy = a.y - b.y
         return dx * dx + dy * dy
 
-    for i in ids:
-        sys_i = systems[i]
-        distances = []
-        for j in ids:
-            if i == j:
-                continue
-            sys_j = systems[j]
-            distances.append((dist2(sys_i, sys_j), j))
-        distances.sort(key=lambda t: t[0])
-        nearest = [j for _, j in distances[:LANES_PER_SYSTEM]]
-        for j in nearest:
-            a, b = sorted((i, j))
-            lane_set.add((a, b))
+    def _delaunay_edges() -> list[tuple[float, int, int]]:
+        if len(ids) < 3:
+            edges: list[tuple[float, int, int]] = []
+            for i in ids:
+                for j in ids:
+                    if i >= j:
+                        continue
+                    edges.append((dist2(systems[i], systems[j]), i, j))
+            edges.sort(key=lambda t: t[0])
+            return edges
 
-    # Ensure the graph is fully connected by linking components with shortest bridges
-    def components(edges: set[tuple[int, int]]) -> List[List[int]]:
-        adj: Dict[int, List[int]] = {i: [] for i in ids}
-        for a, b in edges:
-            adj[a].append(b)
-            adj[b].append(a)
-        seen = set()
-        comps: List[List[int]] = []
-        for node in ids:
-            if node in seen:
-                continue
-            stack = [node]
-            curr = []
-            seen.add(node)
-            while stack:
-                n = stack.pop()
-                curr.append(n)
-                for nxt in adj[n]:
-                    if nxt not in seen:
-                        seen.add(nxt)
-                        stack.append(nxt)
-            comps.append(curr)
-        return comps
+        points = np.array([(systems[i].x, systems[i].y) for i in ids])
+        tri = Delaunay(points)
+        edge_set: set[tuple[int, int]] = set()
+        for simplex in tri.simplices:
+            a, b, c = simplex
+            for u, v in ((a, b), (b, c), (c, a)):
+                i = ids[u]
+                j = ids[v]
+                edge = (i, j) if i < j else (j, i)
+                edge_set.add(edge)
+        edges: list[tuple[float, int, int]] = []
+        for a, b in edge_set:
+            edges.append((dist2(systems[a], systems[b]), a, b))
+        edges.sort(key=lambda t: t[0])
+        return edges
 
-    comp_list = components(lane_set)
-    while len(comp_list) > 1:
-        # connect the smallest component to the largest (or first)
-        comp_list.sort(key=len, reverse=True)
-        main = comp_list[0]
-        other = comp_list[-1]
-        best = None
-        best_d2 = None
-        for a_id in main:
-            for b_id in other:
-                d2 = dist2(systems[a_id], systems[b_id])
-                if best_d2 is None or d2 < best_d2:
-                    best_d2 = d2
-                    best = (min(a_id, b_id), max(a_id, b_id))
-        if best:
-            lane_set.add(best)
-        comp_list = components(lane_set)
+    base_edges = _delaunay_edges()
+
+    def _build_lanes(max_lane_len: float) -> set[tuple[int, int]] | None:
+        if not base_edges:
+            return None
+        max_lane_dist2 = max_lane_len * max_lane_len
+        edges = [(d2, a, b) for (d2, a, b) in base_edges if d2 <= max_lane_dist2]
+        if not edges:
+            return None
+
+        parent = list(range(num_systems))
+        rank = [0] * num_systems
+        degree = [0] * num_systems
+        lanes: set[tuple[int, int]] = set()
+
+        def find(x: int) -> int:
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        def union(a: int, b: int) -> None:
+            ra, rb = find(a), find(b)
+            if ra == rb:
+                return
+            if rank[ra] < rank[rb]:
+                parent[ra] = rb
+            elif rank[ra] > rank[rb]:
+                parent[rb] = ra
+            else:
+                parent[rb] = ra
+                rank[ra] += 1
+
+        # Build a connected backbone (spanning tree) respecting max degree
+        for _, a, b in edges:
+            if degree[a] >= max_degree or degree[b] >= max_degree:
+                continue
+            if find(a) != find(b):
+                lanes.add((a, b))
+                degree[a] += 1
+                degree[b] += 1
+                union(a, b)
+
+        roots = {find(i) for i in ids}
+        if len(roots) > 1:
+            return None
+
+        return lanes
+
+    max_lane_len = MAX_LANE_LENGTH
+    max_allowed = 1.5  # slightly above unit square diagonal (~1.414)
+    lane_set = None
+    while max_lane_len <= max_allowed + 1e-9:
+        lane_set = _build_lanes(max_lane_len)
+        if lane_set is not None:
+            break
+        max_lane_len *= 1.25
+
+    if lane_set is None:
+        raise ValueError(
+            "Unable to build a connected graph with the current "
+            "LANES_PER_SYSTEM and maximum_lane_length constraints."
+        )
+
+    print(f"[sector] max lane length used: {max_lane_len:.3f}")
 
     for a, b in lane_set:
         systems[a].neighbors.append(b)
@@ -370,7 +337,8 @@ def _compute_econ_power(world: World, faction_ids: List[str]) -> Dict[str, float
     for sys in world.systems.values():
         owner = sys.owner
         if owner in econ_power:
-            sizes[owner] = sizes.get(owner, 0) + 1
+            sizes.setdefault(owner, 0)
+            sizes[owner] += 1
             econ_power[owner] += _system_econ_value(sys)
 
     for fid, size in sizes.items():
@@ -476,7 +444,9 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
             return
 
         old_owner = sys.owner
-        base_label = FACTION_NAMES.get(old_owner, "Rebels")
+        base_label = (
+            FACTION_NAMES[old_owner] if old_owner in FACTION_NAMES else "Rebels"
+        )
 
         roll = random.random()
         if roll > NEW_FACTION_CHANCE:
@@ -502,9 +472,7 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
                 enroute_to=None,
                 eta=0,
             )
-            world.faction_build_stock[LEAGUE_FACTION_ID] = (
-                world.faction_build_stock.get(LEAGUE_FACTION_ID, 0.0)
-            )
+            world.faction_build_stock.setdefault(LEAGUE_FACTION_ID, 0.0)
             text = (
                 f"t={world.tick}: Rebellion in {describe_system(sys)}! "
                 f"{FACTION_NAMES[old_owner]} lost control; the world joined the {FACTION_NAMES[LEAGUE_FACTION_ID]}."
@@ -536,9 +504,8 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
                 eta=0,
             )
             # seed some build stock so they can reinforce soon
-            world.faction_build_stock[new_fid] = (
-                world.faction_build_stock.get(new_fid, 0.0) + BUILD_COST
-            )
+            world.faction_build_stock.setdefault(new_fid, 0.0)
+            world.faction_build_stock[new_fid] += BUILD_COST
             text = (
                 f"t={world.tick}: Secession in {describe_system(sys)}! "
                 f"A splinter of {FACTION_NAMES[old_owner]} joined the rebel faction "
@@ -815,8 +782,8 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
         resolve_system_conflict(dest_id, fleet.owner, fleets_at_or_arriving)
 
     for fid in arrivals:
-        fl = world.fleets.get(fid)
-        if fl:
+        if fid in world.fleets:
+            fl = world.fleets[fid]
             resolve_arrival(fl)
 
     # Failsafe: if multiple factions still share a system, resolve a local battle.
@@ -831,9 +798,8 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
             continue
         strength_by_owner: Dict[str, float] = {}
         for fl in fleets_here:
-            strength_by_owner[fl.owner] = (
-                strength_by_owner.get(fl.owner, 0.0) + fl.strength
-            )
+            strength_by_owner.setdefault(fl.owner, 0.0)
+            strength_by_owner[fl.owner] += fl.strength
         attacker = max(strength_by_owner.items(), key=lambda kv: kv[1])[0]
         resolve_system_conflict(sys_id, attacker, fleets_here)
 
@@ -866,9 +832,8 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
         # Pick faction with highest total strength; if tie, leave contested.
         strength_by_owner: Dict[str, float] = {}
         for fl in fleets_here:
-            strength_by_owner[fl.owner] = (
-                strength_by_owner.get(fl.owner, 0.0) + fl.strength
-            )
+            strength_by_owner.setdefault(fl.owner, 0.0)
+            strength_by_owner[fl.owner] += fl.strength
 
         if not strength_by_owner:
             continue
@@ -898,8 +863,8 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
 
     # --- Fleet building based on economy ---
     for f in faction_ids:
-        stock = world.faction_build_stock.get(f, 0.0)
-        stock += econ_power.get(f, 0.0) * BUILD_RATE
+        stock = world.faction_build_stock[f]
+        stock += econ_power[f] * BUILD_RATE
         world.faction_build_stock[f] = stock
 
         while world.faction_build_stock[f] >= BUILD_COST:
@@ -1062,7 +1027,8 @@ def advance_world(world: World, orders: List[Order]) -> TickSummary:
     systems_per_faction: Dict[str, int] = {}
     for sys in world.systems.values():
         if sys.owner is not None:
-            systems_per_faction[sys.owner] = systems_per_faction.get(sys.owner, 0) + 1
+            systems_per_faction.setdefault(sys.owner, 0)
+            systems_per_faction[sys.owner] += 1
 
     # Global updates: heat decay & stability recovery + empire sprawl penalty
     for sys in world.systems.values():

@@ -15,6 +15,7 @@ from typing import List, Optional, Set
 import redis
 
 from sector.puppet import generate_orders_from_snapshot
+from sector.models.redis_config import REDIS_SETTINGS
 
 
 @dataclass(frozen=True)
@@ -36,9 +37,9 @@ class BotConfig:
 
 def _load_config() -> BotConfig:
     return BotConfig(
-        redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
-        snapshot_key=os.environ.get("SNAPSHOT_KEY", "sector:snapshot"),
-        event_stream=os.environ.get("EVENT_STREAM", "sector:events"),
+        redis_url=str(REDIS_SETTINGS.redis_url),
+        snapshot_key=REDIS_SETTINGS.snapshot_key,
+        event_stream=REDIS_SETTINGS.event_stream,
         universe_key=os.environ.get("UNIVERSE_KEY", "sector:universe_id"),
         human_factions_key=os.environ.get(
             "HUMAN_FACTIONS_KEY", "sector:human_factions"

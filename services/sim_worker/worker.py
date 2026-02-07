@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional
 
 from sector.puppet import reset_factions
-from sector.config import SIM_CONFIG
+from sector.models import SIM_CONFIG
 from sector.infra.redis_streams import RedisStreams
 from sector.state_utils import snapshot_from_world
 from sector.world import Fleet, Order, World, advance_world, create_sector, FACTION_NAMES
@@ -51,11 +51,13 @@ def _load_config() -> WorkerConfig:
         event_maxlen=int(os.environ.get("EVENT_STREAM_MAXLEN", 5000)),
         snapshot_every=int(os.environ.get("SNAPSHOT_EVERY", 1)),
         order_block_ms=int(
-            os.environ.get("ORDER_BLOCK_MS", SIM_CONFIG.get("order_block_ms", 1))
+            os.environ.get(
+                "ORDER_BLOCK_MS", SIM_CONFIG.simulation_modifiers.order_block_ms
+            )
         ),
         lease_key=os.environ.get("LEASE_KEY", "sector:lease"),
         lease_ttl_ms=int(
-            os.environ.get("LEASE_TTL_MS", SIM_CONFIG.get("lease_ttl_ms", 5000))
+            os.environ.get("LEASE_TTL_MS", SIM_CONFIG.lease_ttl_ms)
         ),
         session_key_prefix=os.environ.get("SESSION_KEY_PREFIX", "sector:session"),
         address_session_prefix=os.environ.get(
@@ -85,7 +87,7 @@ def _load_config() -> WorkerConfig:
 
 _CONFIG = _load_config()
 
-TICK_DELAY: float = float(SIM_CONFIG.get("tick_delay", 0.5))
+TICK_DELAY: float = SIM_CONFIG.simulation_modifiers.tick_delay
 
 
 @dataclass
