@@ -666,6 +666,9 @@
     let panStart = null;
     let panOrigin = null;
     let lastPointerDownAt = 0;
+    let pendingPickId = null;
+    let pendingDown = null;
+    const PAN_THRESHOLD = 6;
     let seedInputDirty = false;
     const MIN_ZOOM = 0.6;
     const MAX_ZOOM = 3.5;
@@ -1408,7 +1411,7 @@
       if (!lastFrame || !Array.isArray(lastFrame.systems)) return null;
       const world = screenToWorld(x, y);
       let bestId = null;
-      let bestDist = 16 / camera.scale;
+      let bestDist = Infinity;
       lastFrame.systems.forEach(sys => {
         const p = lastProj[sys.id];
         if (!p) return;
@@ -2289,58 +2292,11 @@
       const picked = pickSystemAt(x, y);
       if (!lastFrame) return;
 
-      if (picked === null) {
-        panning = true;
-        panStart = { x: ev.clientX, y: ev.clientY };
-        panOrigin = { x: root.position.x, y: root.position.y };
-        return;
-      }
-
-      if (!playerFaction && picked !== null) {
-        const sys = (lastFrame.systems || []).find(s => s.id === picked);
-        if (sys && sys.owner) {
-          setPreviewFaction(sys.owner);
-          setSelectedFaction(sys.owner);
-        }
-      }
-      if (!playerFaction || picked === null) return;
-      const sys = (lastFrame.systems || []).find(s => s.id === picked);
-      if (!sys) return;
-      if (selectedOriginId === null) {
-        if (!idleStrengthBySystem.has(sys.id)) {
-          showNotice("No idle fleets at that system.");
-          setTimeout(hideNotice, 1200);
-          return;
-        }
-        selectedOriginId = sys.id;
-        selectedTargetId = null;
-        previewTargetId = null;
-        renderSelection();
-        return;
-      }
-      if (picked === selectedOriginId) {
-        selectedOriginId = null;
-        selectedTargetId = null;
-        previewTargetId = null;
-        renderSelection();
-        return;
-      }
-      selectedTargetId = picked;
-      previewTargetId = null;
-      const path = findPath(selectedOriginId, selectedTargetId);
-      if (!path || path.length < 2) {
-        showNotice("No route found.");
-        setTimeout(hideNotice, 1200);
-        selectedTargetId = null;
-        renderSelection();
-        return;
-      }
-      sendOrder(selectedOriginId, selectedTargetId, "human-route")
-        .catch(err => showNotice(err.message));
-      selectedOriginId = null;
-      selectedTargetId = null;
-      previewTargetId = null;
-      renderSelection();
+      pendingPickId = picked;
+      pendingDown = { x: ev.clientX, y: ev.clientY };
+      panning = false;
+      panStart = { x: ev.clientX, y: ev.clientY };
+      panOrigin = { x: root.position.x, y: root.position.y };
     });
 
     app.view.addEventListener("contextmenu", (ev) => {
@@ -2360,6 +2316,13 @@
       const rect = app.view.getBoundingClientRect();
       const x = ev.clientX - rect.left;
       const y = ev.clientY - rect.top;
+      if (!panning && pendingDown) {
+        const dx = ev.clientX - pendingDown.x;
+        const dy = ev.clientY - pendingDown.y;
+        if (Math.hypot(dx, dy) > PAN_THRESHOLD) {
+          panning = true;
+        }
+      }
       if (panning && panStart && panOrigin) {
         const dx = ev.clientX - panStart.x;
         const dy = ev.clientY - panStart.y;
@@ -2385,12 +2348,71 @@
       panning = false;
       panStart = null;
       panOrigin = null;
+      if (!lastFrame) return;
+      if (pendingPickId === null) return;
+      if (pendingDown) {
+        const now = Date.now();
+        const clickish = now - lastPointerDownAt < 400;
+        if (clickish && !panning) {
+          const picked = pendingPickId;
+          if (!playerFaction && picked !== null) {
+            const sys = (lastFrame.systems || []).find(s => s.id === picked);
+            if (sys && sys.owner) {
+              setPreviewFaction(sys.owner);
+              setSelectedFaction(sys.owner);
+            }
+          }
+          if (playerFaction && picked !== null) {
+            const sys = (lastFrame.systems || []).find(s => s.id === picked);
+            if (!sys) return;
+            if (selectedOriginId === null) {
+              if (!idleStrengthBySystem.has(sys.id)) {
+                showNotice("No idle fleets at that system.");
+                setTimeout(hideNotice, 1200);
+                return;
+              }
+              selectedOriginId = sys.id;
+              selectedTargetId = null;
+              previewTargetId = null;
+              renderSelection();
+              return;
+            }
+            if (picked === selectedOriginId) {
+              selectedOriginId = null;
+              selectedTargetId = null;
+              previewTargetId = null;
+              renderSelection();
+              return;
+            }
+            selectedTargetId = picked;
+            previewTargetId = null;
+            const path = findPath(selectedOriginId, selectedTargetId);
+            if (!path || path.length < 2) {
+              showNotice("No route found.");
+              setTimeout(hideNotice, 1200);
+              selectedTargetId = null;
+              renderSelection();
+              return;
+            }
+            sendOrder(selectedOriginId, selectedTargetId, "human-route")
+              .catch(err => showNotice(err.message));
+            selectedOriginId = null;
+            selectedTargetId = null;
+            previewTargetId = null;
+            renderSelection();
+          }
+        }
+      }
+      pendingPickId = null;
+      pendingDown = null;
     });
 
     app.view.addEventListener("pointerleave", () => {
       panning = false;
       panStart = null;
       panOrigin = null;
+      pendingPickId = null;
+      pendingDown = null;
       hoverSystemId = null;
       previewTargetId = null;
       if (!playerFaction) {
