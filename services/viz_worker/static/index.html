@@ -413,7 +413,7 @@
       <div class="panel-body">
         <div id="status-player" class="mono">Faction: —</div>
         <div class="row">
-          <button class="btn" id="restart-sim-status" type="button">New Map</button>
+          <button class="btn" id="pause-sim" type="button">Pause</button>
         </div>
       </div>
     </div>
@@ -474,7 +474,7 @@
     const togglePanelsBtn = document.getElementById("toggle-panels");
     const logoutBtn = document.getElementById("logout");
     const statusPlayerEl = document.getElementById("status-player");
-    const restartStatusBtn = document.getElementById("restart-sim-status");
+    const pauseBtn = document.getElementById("pause-sim");
     const contextMenuEl = document.getElementById("context-menu");
     const contextMenuTitleEl = document.getElementById("context-menu-title");
     const contextRallyBtn = document.getElementById("context-rally");
@@ -520,25 +520,6 @@
 
     if (restartBtn) {
       restartBtn.addEventListener("click", async () => {
-        if (!authToken) {
-          showNotice("Sign in to restart the simulation.");
-          return;
-        }
-        if (!await confirmNewMap()) return;
-        const restartSeed = `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
-        apiFetch(`/admin/restart?seed=${encodeURIComponent(restartSeed)}`, { method: "POST" })
-          .then(() => {
-            refreshPlayer().then(refreshFactions).catch(() => {});
-            showNotice("New map requested.");
-            setTimeout(hideNotice, 1500);
-            if (mapSeedEl) mapSeedEl.textContent = `Seed: ${restartSeed}`;
-            if (seedInputEl) seedInputEl.value = restartSeed;
-          })
-          .catch(err => showNotice(err.message));
-      });
-    }
-    if (restartStatusBtn) {
-      restartStatusBtn.addEventListener("click", async () => {
         if (!authToken) {
           showNotice("Sign in to restart the simulation.");
           return;
@@ -691,6 +672,7 @@
     const camera = { scale: 1, x: 0, y: 0 };
     let uiStage = "auth";
     let botsOnlyActive = false;
+    let paused = false;
     let previewFactionId = null;
     let selectedFactionId = null;
     let openFactions = new Set();
@@ -711,6 +693,22 @@
           setPreviewFaction(null);
         }
         updateAuthControls();
+      });
+    }
+    if (pauseBtn) {
+      pauseBtn.addEventListener("click", () => {
+        if (!authToken) {
+          showNotice("Sign in to pause the simulation.");
+          return;
+        }
+        apiFetch(`/admin/pause?paused=${paused ? "false" : "true"}`, { method: "POST" })
+          .then((data) => {
+            paused = !!data.paused;
+            setPauseLabel();
+            showNotice(paused ? "Simulation paused." : "Simulation resumed.");
+            setTimeout(hideNotice, 1500);
+          })
+          .catch(err => showNotice(err.message));
       });
     }
 
@@ -736,6 +734,11 @@
       noticeEl.classList.add("visible");
     }
     function hideNotice() { noticeEl.classList.remove("visible"); }
+
+    function setPauseLabel() {
+      if (!pauseBtn) return;
+      pauseBtn.textContent = paused ? "Resume" : "Pause";
+    }
 
     function setPlayerStatus(text) {
       playerStatusEl.innerHTML = String(text).replace(/\n/g, "<br />");
@@ -936,6 +939,13 @@
       setLogoutVisible(true);
       updateAuthControls();
       setUiStage((playerFaction || botsOnlyActive) ? "game" : "auth");
+      try {
+        const status = await apiFetch("/admin/pause");
+        paused = !!status.paused;
+      } catch {
+        paused = false;
+      }
+      setPauseLabel();
     }
 
     async function refreshFactions() {

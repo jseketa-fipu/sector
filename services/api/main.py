@@ -36,6 +36,7 @@ class ApiConfig:
     faction_player_prefix: str
     restart_key: str
     bots_only_key: str
+    pause_key: str
     port: int
 
 
@@ -64,6 +65,7 @@ def _load_config() -> ApiConfig:
         ),
         restart_key=os.environ.get("RESTART_KEY", "sector:restart"),
         bots_only_key=os.environ.get("BOTS_ONLY_KEY", "sector:bots_only"),
+        pause_key=os.environ.get("PAUSE_KEY", "sector:pause"),
         port=int(os.environ.get("PORT", "8000")),
     )
 
@@ -413,6 +415,35 @@ async def bots_only(
     await _clear_faction_claims(universe_id)
     await streams.client.set(f"{_CONFIG.bots_only_key}:{universe_id}", "1")
     return {"status": "ok", "universe_id": universe_id}
+
+
+@app.get("/admin/pause")
+async def pause_status(
+    player: dict = Depends(_get_current_player),
+) -> Dict[str, Any]:
+    universe_id = await _get_universe_id()
+    key = f"{_CONFIG.pause_key}:{universe_id}"
+    paused = bool(await streams.client.get(key))
+    return {"paused": paused, "universe_id": universe_id}
+
+
+@app.post("/admin/pause")
+async def pause_toggle(
+    paused: Optional[bool] = None,
+    player: dict = Depends(_get_current_player),
+) -> Dict[str, Any]:
+    """
+    Pause or resume the simulation for the current universe.
+    """
+    universe_id = await _get_universe_id()
+    key = f"{_CONFIG.pause_key}:{universe_id}"
+    if paused is None:
+        paused = not bool(await streams.client.get(key))
+    if paused:
+        await streams.client.set(key, "1")
+    else:
+        await streams.client.delete(key)
+    return {"paused": bool(paused), "universe_id": universe_id}
 
 
 if __name__ == "__main__":

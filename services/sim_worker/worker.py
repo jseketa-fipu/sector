@@ -40,6 +40,7 @@ class WorkerConfig:
     human_factions_key: str
     restart_key: str
     bots_only_key: str
+    pause_key: str
     reset_universe_on_start: bool
     order_group: str
     order_consumer: str
@@ -75,6 +76,7 @@ def _load_config() -> WorkerConfig:
         human_factions_key=os.environ.get("HUMAN_FACTIONS_KEY", "sector:human_factions"),
         restart_key=os.environ.get("RESTART_KEY", "sector:restart"),
         bots_only_key=os.environ.get("BOTS_ONLY_KEY", "sector:bots_only"),
+        pause_key=os.environ.get("PAUSE_KEY", "sector:pause"),
         reset_universe_on_start=os.environ.get("RESET_UNIVERSE_ON_START", "true")
         .lower()
         == "true",
@@ -289,6 +291,11 @@ class SimulationWorker:
     async def _bots_only_enabled(self) -> bool:
         universe_id = await self._ensure_universe_id()
         key = f"{_CONFIG.bots_only_key}:{universe_id}"
+        return bool(await self.streams.client.get(key))
+
+    async def _paused(self) -> bool:
+        universe_id = await self._ensure_universe_id()
+        key = f"{_CONFIG.pause_key}:{universe_id}"
         return bool(await self.streams.client.get(key))
 
     async def _ensure_initial_snapshot(self) -> None:
@@ -598,6 +605,10 @@ class SimulationWorker:
                         seed=restart_seed,
                     )
                     await asyncio.sleep(0.5)
+                    continue
+
+                if await self._paused():
+                    await asyncio.sleep(max(0.25, TICK_DELAY))
                     continue
 
                 human_factions = await self._get_human_factions()
