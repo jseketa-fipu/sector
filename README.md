@@ -1,19 +1,32 @@
 # Stateless Services Skeleton (Redis-backed)
 
-This repo starts a stateless API and a simulation worker that communicate via Redis. The API serves health, snapshot, events, and accepts orders. The worker is stateless: it acquires a lease, loads the latest snapshot, consumes orders, advances a tick, and writes back the snapshot plus events. All state lives in Redis.
+This repo runs a Redis-backed sector simulation with multiple stateless services:
+- API service (auth, orders, snapshot, events, admin controls)
+- Simulation worker (advances the world and emits snapshots/events)
+- Viz worker (serves the UI and streams updates over WebSocket)
+- Bot worker (AI orders for unclaimed factions)
+- NFT minter (standalone HTTP service for minting awards)
+
+All long-lived state lives in Redis (streams + snapshot hash).
 
 ## Running locally
 
 ```bash
-# build and start redis, api, and sim-worker
+# build and start redis, api, sim-worker, bot-worker, and viz
 docker compose up --build
 ```
 
-API will be on `http://localhost:8000` (health at `/health`, snapshot at `/snapshot`). Redis is exposed on `localhost:6379`.
+API will be on `http://localhost:8000` (health at `/health`, snapshot at `/snapshot`). Viz is on `http://localhost:9000/`. Redis is exposed on `localhost:6379`.
+
+The NFT minter is not part of docker-compose. Run it separately:
+
+```bash
+python services/nft_minter/main.py
+```
 
 ## Deploying on Kubernetes
 
-The `k8s/` directory contains a simple kustomize base that stands up Redis, API, sim worker, viz worker, and an ingress for routing traffic.
+The `k8s/` directory contains a simple kustomize base that stands up Redis, API, sim worker, viz worker, bot worker, and ingress for routing traffic.
 
 1. Build the application image and push it to a registry your cluster can reach:
    ```bash
@@ -45,28 +58,61 @@ The `k8s/` directory contains a simple kustomize base that stands up Redis, API,
 
 ## Configuration
 
-- `REDIS_URL` (default `redis://redis:6379/0` in docker-compose) points services at Redis.
-- `SIM_ID` selects the simulation namespace (default `default`).
-- `TICK_DELAY` controls worker tick speed in seconds (default `0.5`).
-- `LEASE_TTL_MS` sets the lease TTL in ms (default `5000`).
-- `WORKER_ID` identifies the worker for lease ownership (defaults to hostname).
-- Bot service:
-  - `BOT_FACTION` sets which faction the bot plays (default `BotFaction`).
-  - `BOT_POLL_INTERVAL` controls how often the bot polls snapshots (default `1.0`).
-  - `BOT_MAX_ORDERS` caps orders per tick from the bot (default `3`).
+- Shared Redis:
+  - `REDIS_URL` points services at Redis.
+  - `EVENT_STREAM`, `ORDER_STREAM`, `SNAPSHOT_KEY` name the Redis keys/streams.
+- API:
+  - `PORT`, `JWT_SECRET`, `JWT_TTL_SECONDS`, `AUTH_NONCE_TTL_SECONDS`
+  - `BOT_API_TOKEN` (required by bot-worker to post orders)
+- Sim worker:
+  - `LEASE_TTL_MS`, `ORDER_BLOCK_MS`, `RESET_UNIVERSE_ON_START`
+  - `EVENT_STREAM_MAXLEN`, `SNAPSHOT_EVERY`
+  - `WAIT_FOR_FRONTEND`, `FRONTEND_HEALTH_URL`
+- Bot worker:
+  - `BOT_API_URL`, `BOT_API_TOKEN`, `BOT_POLL_INTERVAL`, `BOT_MAX_ORDERS`, `BOT_EVENT_BLOCK_MS`
+- Viz:
+  - `API_URL`, `PORT`
+- NFT minter:
+  - `PORT`, `MINTER_API_KEY`
 
 ## How it works (stateless loop)
 
-1. Worker acquires a Redis lease (`sim:{id}:lease`) to ensure only one tick loop runs.
-2. Loads the latest snapshot (`sim:{id}:snapshot`) or seeds one.
-3. Reads pending orders from `sim:{id}:orders` after the last processed id.
-4. Applies orders, advances one tick (placeholder logic), emits events with ms timestamps.
-5. Saves the new snapshot and events with optimistic concurrency (WATCH/MULTI).
-6. Renews the lease; if lost, stops mutating.
-7. Repeat each `TICK_DELAY`.
+1. Sim worker acquires a Redis lease to ensure only one tick loop runs.
+2. Sim worker loads or seeds the world, then consumes orders from the orders stream.
+3. Orders are normalized (pathing, fleet selection), applied, and the world advances a tick.
+4. Sim worker publishes snapshot + events to Redis (snapshot hash + event stream).
+5. API serves snapshot/events and accepts orders. Human orders require auth; bots use `X-Bot-Token`.
+6. Viz worker serves the UI and a `/ws` stream sourced from Redis events.
+7. Bot worker polls snapshots, generates AI orders for unclaimed factions, and posts them to the API.
 
-API reads `snapshot` and `events`, and appends new `orders`; it holds no state. Orders are validated via a discriminated Pydantic schema (`set_owner`, `add_fleet`, `note`).
-A bot service polls snapshots and emits simple orders (claim neutrals, ensure garrisons) for its configured faction.
+## API endpoints
+
+Base URL: `http://localhost:8000` (via API service). The viz worker proxies API calls under `/api/*` for the browser.
+
+Auth:
+- `POST /auth/nonce` to get a nonce + login message.
+- `POST /auth/verify` with signature to get a JWT.
+- Pass `Authorization: Bearer <token>` on human-only endpoints.
+- Bot orders use `X-Bot-Token: <BOT_API_TOKEN>` and skip human auth.
+
+Endpoints (API service):
+- `GET /health`
+- `POST /auth/nonce`
+- `POST /auth/verify`
+- `GET /me`
+- `GET /factions`
+- `POST /factions/claim`
+- `GET /snapshot`
+- `GET /events?after=<id>&count=<n>`
+- `POST /orders`
+- `POST /admin/restart`
+- `POST /admin/bots-only`
+- `GET /admin/pause`
+- `POST /admin/pause`
+
+NFT minter (separate service, default `http://localhost:9100`):
+- `GET /health`
+- `POST /mint` (optional `Authorization: Bearer <MINTER_API_KEY>`)
 
 ## Architecture diagram
 
@@ -79,13 +125,18 @@ flowchart LR
 
   API[API Service]
   WORKER[Sim Worker]
+  BOTW[Bot Worker]
   REDIS[(Redis)]
+  MINTER[NFT Minter]
 
   VIZ -- snapshot/events/ws --> API
   BOT -- orders --> API
   API -- read/write --> REDIS
   WORKER -- read/lease/orders --> REDIS
   WORKER -- snapshot/events --> REDIS
+  BOTW -- snapshot --> REDIS
+  BOTW -- orders --> API
+  API -- mint requests --> MINTER
 ```
 
 ## Architecture diagram (deployment)
@@ -99,12 +150,14 @@ flowchart TB
     API_POD[Deployment: api]
     VIZ_POD[Deployment: viz]
     WORKER_POD[Deployment: sim-worker]
+    BOT_POD[Deployment: bot-worker]
     REDIS_POD[StatefulSet: redis]
   end
 
   INGRESS --> API_SVC --> API_POD
   INGRESS --> VIZ_SVC --> VIZ_POD
   WORKER_POD --> REDIS_POD
+  BOT_POD --> REDIS_POD
   API_POD --> REDIS_POD
 ```
 
@@ -115,7 +168,9 @@ flowchart LR
   subgraph Services
     API_CODE[services/api]
     WORKER_CODE[services/sim_worker]
-    VIZ_CODE[services/viz]
+    VIZ_CODE[services/viz_worker]
+    BOT_CODE[services/bot_worker]
+    MINTER_CODE[services/nft_minter]
   end
 
   subgraph Simulation
@@ -123,12 +178,20 @@ flowchart LR
     PUPPET[sector/puppet.py]
     STATE[sector/state_utils.py]
     MODELS[sector/models.py]
+    STREAMS[sector/infra/redis_streams.py]
   end
 
   API_CODE --> STATE
+  API_CODE --> STREAMS
   WORKER_CODE --> WORLD
   WORKER_CODE --> PUPPET
   WORKER_CODE --> STATE
+  WORKER_CODE --> STREAMS
+  VIZ_CODE --> STATE
+  VIZ_CODE --> STREAMS
+  BOT_CODE --> PUPPET
+  BOT_CODE --> STREAMS
+  MINTER_CODE --> MODELS
   WORLD --> MODELS
   PUPPET --> MODELS
   STATE --> MODELS
@@ -136,6 +199,6 @@ flowchart LR
 
 ## Next steps
 
-- Replace the placeholder state/advance logic with the real simulation.
-- Expand event schema and order validation (Pydantic models in the API).
 - Add metrics/observability and resilience (backoff, retries).
+- Document public API routes and auth flow.
+- Add deployment manifests for the NFT minter if needed in-cluster.
