@@ -129,6 +129,23 @@ NFT minter (separate service, default `http://localhost:9100`):
 - `GET /health`
 - `POST /mint` (optional `Authorization: Bearer <MINTER_API_KEY>`)
 
+## Technologies used
+
+- Python 3.11
+- FastAPI + Uvicorn
+- Redis (streams + snapshot hash)
+- Pydantic + pydantic-settings
+- JWT auth (PyJWT) + Ethereum signature verification (`eth-account`)
+- Redis client (`redis-py`, incl. `redis.asyncio`)
+- WebSockets
+- PixiJS (pixi.js-legacy via CDN)
+- NumPy + SciPy (world generation + Delaunay triangulation)
+- Docker + Docker Compose
+- Kubernetes (k3s), Kustomize
+- NGINX Ingress Controller + cert-manager
+- Mermaid diagrams
+- HTML/CSS/JS frontend (served by the frontend worker)
+
 ## Architecture diagram (human player timeline)
 
 ```mermaid
