@@ -11,10 +11,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - sector.seketa.it
-      secretName: sector-seketa-it-tls
+        - example.com
+      secretName: sector-tls
   rules:
-    - host: sector.seketa.it
+    - host: example.com
       http:
         paths:
           - path: /api(/|$)(.*)

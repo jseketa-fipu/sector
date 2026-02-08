@@ -18,15 +18,27 @@ docker compose up --build
 
 API will be on `http://localhost:8000` (health at `/health`, snapshot at `/snapshot`). Frontend is on `http://localhost:9000/`. Redis is exposed on `localhost:6379`.
 
-The NFT minter is not part of docker-compose. Run it separately:
+The NFT minter is not part of docker-compose. It has its own Dockerfile for testing:
 
 ```bash
-python services/nft_minter/main.py
+docker build -t sector-nft-minter:local services/nft_minter
+docker run --rm -p 9100:9100 sector-nft-minter:local
 ```
 
 ## Deploying on Kubernetes
 
-The `k8s/` directory contains a simple kustomize base that stands up Redis, API, sim worker, frontend worker, bot worker, and ingress for routing traffic.
+The `k8s/` directory contains a kustomize base for Redis, API, sim worker, frontend worker, bot worker, and ingress. Deployment can be done end-to-end with the script in `deploy_vps.sh`.
+
+Deploy script usage (VPS):
+- Prereqs: root/sudo on the VPS, outbound internet access, and a DNS name pointing to the VPS.
+- Required: git repo URL as the first argument.
+- Required env vars: `DOMAIN`, `EMAIL`.
+- Optional env vars: `KUBECONFIG_PATH`, `REPO_DIR`, `K3S_VERSION`, `IMAGE_NAME`, `IMAGE_TAG`, `STOP_HOST_NGINX`, `TLS_SECRET_NAME`.
+- Run:
+
+```bash
+DOMAIN=sector.example.com EMAIL=you@example.com ./deploy_vps.sh <git_repo_url>
+```
 
 1. Build the application image and push it to a registry your cluster can reach:
    ```bash
@@ -260,4 +272,3 @@ flowchart LR
 
 - Add metrics/observability and resilience (backoff, retries).
 - Document public API routes and auth flow.
-- Add deployment manifests for the NFT minter if needed in-cluster.

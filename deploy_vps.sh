@@ -15,6 +15,7 @@ IMAGE_NAME="${IMAGE_NAME:-distributed-app}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 STOP_HOST_NGINX="${STOP_HOST_NGINX:-1}"
+TLS_SECRET_NAME="${TLS_SECRET_NAME:-sector-tls}"
 
 if [ -z "$REPO_URL" ]; then
   # First arg is required so we can clone/pull the repo.
@@ -196,11 +197,13 @@ kubectl apply -k "$REPO_DIR/k8s"
 # Patch ingress host + TLS without wiping HTTP paths.
 kubectl -n sector-sim patch ingress sector-sim-frontend --type=json -p="[
   {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"${DOMAIN}\"},
-  {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"}
+  {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"},
+  {\"op\":\"replace\",\"path\":\"/spec/tls/0/secretName\",\"value\":\"${TLS_SECRET_NAME}\"}
 ]"
 kubectl -n sector-sim patch ingress sector-sim-api --type=json -p="[
   {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"${DOMAIN}\"},
-  {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"}
+  {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"},
+  {\"op\":\"replace\",\"path\":\"/spec/tls/0/secretName\",\"value\":\"${TLS_SECRET_NAME}\"}
 ]"
 
 # --- Guard: ensure ingress paths still exist (older scripts used merge patches that wiped rules) ---
@@ -212,11 +215,13 @@ if [ -z "$frontend_paths" ] || [ -z "$api_paths" ]; then
   kubectl apply -f "$REPO_DIR/k8s/base/ingress-api.yaml"
   kubectl -n sector-sim patch ingress sector-sim-frontend --type=json -p="[
     {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"${DOMAIN}\"},
-    {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"}
+    {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"},
+    {\"op\":\"replace\",\"path\":\"/spec/tls/0/secretName\",\"value\":\"${TLS_SECRET_NAME}\"}
   ]"
   kubectl -n sector-sim patch ingress sector-sim-api --type=json -p="[
     {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"${DOMAIN}\"},
-    {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"}
+    {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"},
+    {\"op\":\"replace\",\"path\":\"/spec/tls/0/secretName\",\"value\":\"${TLS_SECRET_NAME}\"}
   ]"
 fi
 
