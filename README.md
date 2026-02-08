@@ -1,3 +1,5 @@
+# "In the grim darkness of the far future, there is only war."
+
 # Sector: 40k‑Inspired Simulation
 
 A playable, Warhammer 40k–inspired sector simulation with real-time updates and bot factions. The stack is Redis-backed and fully stateless at the service layer:
