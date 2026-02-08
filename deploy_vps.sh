@@ -109,14 +109,12 @@ for i in {1..30}; do
   fi
 done
 
-if [ ! -d "$REPO_DIR/.git" ]; then
-  # Fresh clone if repo isn't present.
-  mkdir -p "$REPO_DIR"
-  git clone "$REPO_URL" "$REPO_DIR"
-else
-  # Fast update if repo already exists.
-  git -C "$REPO_DIR" pull --rebase
+# Always clone fresh to ensure latest content is used for the build.
+if [ -d "$REPO_DIR" ]; then
+  rm -rf "$REPO_DIR"
 fi
+mkdir -p "$REPO_DIR"
+git clone "$REPO_URL" "$REPO_DIR"
 
 # --- Host cleanup to free ports 80/443 for k3s servicelb ---
 # Free host ports 80/443 if requested (needed for k3s servicelb).
