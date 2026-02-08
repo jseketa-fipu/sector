@@ -1,4 +1,4 @@
-# "In the grim darkness of the far future, there is only war."
+> "In the grim darkness of the far future, there is only war."
 
 # Sector: 40k‑Inspired Simulation
 
