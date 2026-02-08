@@ -1,6 +1,6 @@
-# Stateless Services Skeleton (Redis-backed)
+# Sector: 40k‑Inspired Simulation
 
-This repo runs a Redis-backed sector simulation with multiple stateless services:
+A playable, Warhammer 40k–inspired sector simulation with real-time updates and bot factions. The stack is Redis-backed and fully stateless at the service layer:
 - API service (auth, orders, snapshot, events, admin controls)
 - Simulation worker (advances the world and emits snapshots/events)
 - Frontend worker (serves the UI and streams updates over WebSocket)
