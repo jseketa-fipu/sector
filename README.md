@@ -40,6 +40,7 @@ Deploy script usage (VPS):
 DOMAIN=sector.example.com EMAIL=you@example.com ./deploy_vps.sh <git_repo_url>
 ```
 
+Manual deployment (without the script):
 1. Build the application image and push it to a registry your cluster can reach:
    ```bash
    docker build -t <registry>/distributed-app:latest .
@@ -271,4 +272,3 @@ flowchart LR
 ## Next steps
 
 - Add metrics/observability and resilience (backoff, retries).
-- Document public API routes and auth flow.
