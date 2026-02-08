@@ -68,6 +68,72 @@ The `k8s/` directory contains a simple kustomize base that stands up Redis, API,
 API reads `snapshot` and `events`, and appends new `orders`; it holds no state. Orders are validated via a discriminated Pydantic schema (`set_owner`, `add_fleet`, `note`).
 A bot service polls snapshots and emits simple orders (claim neutrals, ensure garrisons) for its configured faction.
 
+## Architecture diagram
+
+```mermaid
+flowchart LR
+  subgraph Clients
+    VIZ[Web Viz]
+    BOT[Bot Service]
+  end
+
+  API[API Service]
+  WORKER[Sim Worker]
+  REDIS[(Redis)]
+
+  VIZ -- snapshot/events/ws --> API
+  BOT -- orders --> API
+  API -- read/write --> REDIS
+  WORKER -- read/lease/orders --> REDIS
+  WORKER -- snapshot/events --> REDIS
+```
+
+## Architecture diagram (deployment)
+
+```mermaid
+flowchart TB
+  subgraph Kubernetes
+    INGRESS[Ingress - NGINX]
+    API_SVC[Service: api]
+    VIZ_SVC[Service: viz]
+    API_POD[Deployment: api]
+    VIZ_POD[Deployment: viz]
+    WORKER_POD[Deployment: sim-worker]
+    REDIS_POD[StatefulSet: redis]
+  end
+
+  INGRESS --> API_SVC --> API_POD
+  INGRESS --> VIZ_SVC --> VIZ_POD
+  WORKER_POD --> REDIS_POD
+  API_POD --> REDIS_POD
+```
+
+## Architecture diagram (code structure)
+
+```mermaid
+flowchart LR
+  subgraph Services
+    API_CODE[services/api]
+    WORKER_CODE[services/sim_worker]
+    VIZ_CODE[services/viz]
+  end
+
+  subgraph Simulation
+    WORLD[sector/world.py]
+    PUPPET[sector/puppet.py]
+    STATE[sector/state_utils.py]
+    MODELS[sector/models.py]
+  end
+
+  API_CODE --> STATE
+  WORKER_CODE --> WORLD
+  WORKER_CODE --> PUPPET
+  WORKER_CODE --> STATE
+  WORLD --> MODELS
+  PUPPET --> MODELS
+  STATE --> MODELS
+```
+
 ## Next steps
 
 - Replace the placeholder state/advance logic with the real simulation.
