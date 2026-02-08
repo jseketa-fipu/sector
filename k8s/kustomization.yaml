@@ -9,9 +9,9 @@ resources:
   - base/api.yaml
   - base/bot-worker.yaml
   - base/sim-worker.yaml
-  - base/viz.yaml
+  - base/frontend.yaml
   - base/ingress-api.yaml
-  - base/ingress-viz.yaml
+  - base/ingress-frontend.yaml
 images:
   - name: distributed-app
     newName: distributed-app

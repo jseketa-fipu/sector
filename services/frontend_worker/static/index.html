@@ -484,7 +484,7 @@
       const btn = panel.querySelector(".panel-toggle");
       if (!btn) return;
       const key = panel.dataset.panel || "";
-      const saved = key ? localStorage.getItem(`viz.panel.${key}`) : null;
+      const saved = key ? localStorage.getItem(`frontend.panel.${key}`) : null;
       if (saved === "collapsed") {
         panel.classList.add("collapsed");
         btn.textContent = "Expand";
@@ -498,7 +498,7 @@
         panel.classList.toggle("collapsed");
         const collapsed = panel.classList.contains("collapsed");
         btn.textContent = collapsed ? "Expand" : "Collapse";
-        if (key) localStorage.setItem(`viz.panel.${key}`, collapsed ? "collapsed" : "open");
+        if (key) localStorage.setItem(`frontend.panel.${key}`, collapsed ? "collapsed" : "open");
       });
     });
 
@@ -512,7 +512,7 @@
           const btn = panel.querySelector(".panel-toggle");
           if (btn) btn.textContent = action === "collapsed" ? "Expand" : "Collapse";
           const key = panel.dataset.panel || "";
-          if (key) localStorage.setItem(`viz.panel.${key}`, action === "collapsed" ? "collapsed" : "open");
+          if (key) localStorage.setItem(`frontend.panel.${key}`, action === "collapsed" ? "collapsed" : "open");
         });
         togglePanelsBtn.textContent = action === "collapsed" ? "Expand All" : "Collapse All";
       });

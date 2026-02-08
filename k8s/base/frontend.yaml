@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: viz
+  name: frontend
   namespace: sector-sim
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: viz
+      app: frontend
   template:
     metadata:
       labels:
-        app: viz
+        app: frontend
     spec:
       containers:
-        - name: viz
+        - name: frontend
           image: distributed-app:latest
           imagePullPolicy: IfNotPresent
-          command: ["bash", "-c", "python services/viz_worker/main.py"]
+          command: ["bash", "-c", "python services/frontend_worker/main.py"]
           envFrom:
             - configMapRef:
                 name: redis-config
@@ -34,12 +34,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: viz
+  name: frontend
   namespace: sector-sim
 spec:
   type: ClusterIP
   selector:
-    app: viz
+    app: frontend
   ports:
     - port: 9000
       targetPort: 9000

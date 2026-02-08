@@ -51,9 +51,9 @@ services:
       - redis
       - api
 
-  viz:
+  frontend:
     build: .
-    command: ["bash", "-c", "python services/viz_worker/main.py"]
+    command: ["bash", "-c", "python services/frontend_worker/main.py"]
     environment:
       REDIS_URL: redis://redis:6379/0
       EVENT_STREAM: sector:events

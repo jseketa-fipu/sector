@@ -3,7 +3,7 @@
 This repo runs a Redis-backed sector simulation with multiple stateless services:
 - API service (auth, orders, snapshot, events, admin controls)
 - Simulation worker (advances the world and emits snapshots/events)
-- Viz worker (serves the UI and streams updates over WebSocket)
+- Frontend worker (serves the UI and streams updates over WebSocket)
 - Bot worker (AI orders for unclaimed factions)
 - NFT minter (standalone HTTP service for minting awards)
 
@@ -12,11 +12,11 @@ All long-lived state lives in Redis (streams + snapshot hash).
 ## Running locally
 
 ```bash
-# build and start redis, api, sim-worker, bot-worker, and viz
+# build and start redis, api, sim-worker, bot-worker, and frontend
 docker compose up --build
 ```
 
-API will be on `http://localhost:8000` (health at `/health`, snapshot at `/snapshot`). Viz is on `http://localhost:9000/`. Redis is exposed on `localhost:6379`.
+API will be on `http://localhost:8000` (health at `/health`, snapshot at `/snapshot`). Frontend is on `http://localhost:9000/`. Redis is exposed on `localhost:6379`.
 
 The NFT minter is not part of docker-compose. Run it separately:
 
@@ -26,7 +26,7 @@ python services/nft_minter/main.py
 
 ## Deploying on Kubernetes
 
-The `k8s/` directory contains a simple kustomize base that stands up Redis, API, sim worker, viz worker, bot worker, and ingress for routing traffic.
+The `k8s/` directory contains a simple kustomize base that stands up Redis, API, sim worker, frontend worker, bot worker, and ingress for routing traffic.
 
 1. Build the application image and push it to a registry your cluster can reach:
    ```bash
@@ -41,14 +41,14 @@ The `k8s/` directory contains a simple kustomize base that stands up Redis, API,
    kubectl get pods,svc -n ingress-nginx
    ```
    (If your cluster lacks a load balancer, edit the Service type in `k8s/ingress-nginx/controller.yaml` to `NodePort` and expose the ports manually.)
-4. Apply the app manifests (includes separate ingress objects for API and viz; viz HTTP traffic is served at `/`, and `/ws` is served by the same ingress):
+4. Apply the app manifests (includes separate ingress objects for API and frontend; frontend HTTP traffic is served at `/`, and `/ws` is served by the same ingress):
    ```bash
    kubectl apply -k k8s
    ```
 5. Add `sector.local` to your hosts file (pointing to `127.0.0.1` on Docker Desktop) and hit `http://sector.local/api/health` or `http://sector.local/`. Without an ingress controller you can still port-forward the ClusterIP services:
    ```bash
    kubectl port-forward svc/api 8000:8000
-   kubectl port-forward svc/viz 9000:9000
+   kubectl port-forward svc/frontend 9000:9000
    ```
 6. Tear everything down with:
    ```bash
@@ -82,12 +82,12 @@ The `k8s/` directory contains a simple kustomize base that stands up Redis, API,
 3. Orders are normalized (pathing, fleet selection), applied, and the world advances a tick.
 4. Sim worker publishes snapshot + events to Redis (snapshot hash + event stream).
 5. API serves snapshot/events and accepts orders. Human orders require auth; bots use `X-Bot-Token`.
-6. Viz worker serves the UI and a `/ws` stream sourced from Redis events.
+6. Frontend worker serves the UI and a `/ws` stream sourced from Redis events.
 7. Bot worker polls snapshots, generates AI orders for unclaimed factions, and posts them to the API.
 
 ## API endpoints
 
-Base URL: `http://localhost:8000` (via API service). The viz worker proxies API calls under `/api/*` for the browser.
+Base URL: `http://localhost:8000` (via API service). The frontend worker proxies API calls under `/api/*` for the browser.
 
 Auth:
 - `POST /auth/nonce` to get a nonce + login message.
@@ -120,40 +120,40 @@ NFT minter (separate service, default `http://localhost:9100`):
 sequenceDiagram
   autonumber
   actor Player
-  participant Viz as Web Viz
+  participant Frontend as Web Frontend
   participant API as API Service
   participant Redis as Redis
   participant Sim as Sim Worker
   participant Bot as Bot Worker
 
-  Player->>Viz: Open UI
-  Viz->>API: GET /snapshot
+  Player->>Frontend: Open UI
+  Frontend->>API: GET /snapshot
   API->>Redis: Load snapshot
   Redis-->>API: Snapshot
-  API-->>Viz: Snapshot
-  Viz-->>Player: Render world
+  API-->>Frontend: Snapshot
+  Frontend-->>Player: Render world
 
-  Player->>Viz: Connect live updates
-  Viz->>API: WebSocket /ws (via viz worker proxy)
+  Player->>Frontend: Connect live updates
+  Frontend->>API: WebSocket /ws (via frontend worker proxy)
   API->>Redis: Stream events
   Redis-->>API: Events
-  API-->>Viz: Events
-  Viz-->>Player: Live updates
+  API-->>Frontend: Events
+  Frontend-->>Player: Live updates
 
-  Player->>Viz: Request login
-  Viz->>API: POST /auth/nonce
-  API-->>Viz: Nonce + message
-  Player->>Viz: Sign message
-  Viz->>API: POST /auth/verify (signature)
-  API-->>Viz: JWT
+  Player->>Frontend: Request login
+  Frontend->>API: POST /auth/nonce
+  API-->>Frontend: Nonce + message
+  Player->>Frontend: Sign message
+  Frontend->>API: POST /auth/verify (signature)
+  API-->>Frontend: JWT
 
-  Player->>Viz: Claim faction
-  Viz->>API: POST /factions/claim (Bearer JWT)
+  Player->>Frontend: Claim faction
+  Frontend->>API: POST /factions/claim (Bearer JWT)
   API->>Redis: Record faction claim
-  API-->>Viz: Claim result
+  API-->>Frontend: Claim result
 
-  Player->>Viz: Issue order(s)
-  Viz->>API: POST /orders (Bearer JWT)
+  Player->>Frontend: Issue order(s)
+  Frontend->>API: POST /orders (Bearer JWT)
   API->>Redis: Append to order stream
 
   alt Unclaimed factions exist
@@ -169,8 +169,8 @@ sequenceDiagram
   Sim->>Sim: Apply orders, advance tick
   Sim->>Redis: Save snapshot + append events
   API->>Redis: Read events/snapshot
-  API-->>Viz: Events / snapshot
-  Viz-->>Player: World updates
+  API-->>Frontend: Events / snapshot
+  Frontend-->>Player: World updates
 ```
 
 ## Architecture diagram
@@ -178,7 +178,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
   subgraph Clients
-    VIZ[Web Viz]
+    FRONTEND[Web Frontend]
     BOT[Bot Service]
   end
 
@@ -188,7 +188,7 @@ flowchart LR
   REDIS[(Redis)]
   MINTER[NFT Minter]
 
-  VIZ -- snapshot/events/ws --> API
+  FRONTEND -- snapshot/events/ws --> API
   BOT -- orders --> API
   API -- read/write --> REDIS
   WORKER -- read/lease/orders --> REDIS
@@ -205,16 +205,16 @@ flowchart TB
   subgraph Kubernetes
     INGRESS[Ingress - NGINX]
     API_SVC[Service: api]
-    VIZ_SVC[Service: viz]
+    FRONTEND_SVC[Service: frontend]
     API_POD[Deployment: api]
-    VIZ_POD[Deployment: viz]
+    FRONTEND_POD[Deployment: frontend]
     WORKER_POD[Deployment: sim-worker]
     BOT_POD[Deployment: bot-worker]
     REDIS_POD[StatefulSet: redis]
   end
 
   INGRESS --> API_SVC --> API_POD
-  INGRESS --> VIZ_SVC --> VIZ_POD
+  INGRESS --> FRONTEND_SVC --> FRONTEND_POD
   WORKER_POD --> REDIS_POD
   BOT_POD --> REDIS_POD
   API_POD --> REDIS_POD
@@ -227,7 +227,7 @@ flowchart LR
   subgraph Services
     API_CODE[services/api]
     WORKER_CODE[services/sim_worker]
-    VIZ_CODE[services/viz_worker]
+    FRONTEND_CODE[services/frontend_worker]
     BOT_CODE[services/bot_worker]
     MINTER_CODE[services/nft_minter]
   end
@@ -246,8 +246,8 @@ flowchart LR
   WORKER_CODE --> PUPPET
   WORKER_CODE --> STATE
   WORKER_CODE --> STREAMS
-  VIZ_CODE --> STATE
-  VIZ_CODE --> STREAMS
+  FRONTEND_CODE --> STATE
+  FRONTEND_CODE --> STREAMS
   BOT_CODE --> PUPPET
   BOT_CODE --> STREAMS
   MINTER_CODE --> MODELS

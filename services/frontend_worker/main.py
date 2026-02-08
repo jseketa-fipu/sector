@@ -128,7 +128,7 @@ async def ws(ws: WebSocket):
 
 if __name__ == "__main__":
     uvicorn.run(
-        "services.viz_worker.main:app",
+        "services.frontend_worker.main:app",
         host="0.0.0.0",
         port=config.port,
         reload=False,

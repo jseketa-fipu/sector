@@ -194,7 +194,7 @@ kubectl apply -k "$REPO_DIR/k8s"
 
 # --- Patch ingress host + TLS without wiping HTTP paths ---
 # Patch ingress host + TLS without wiping HTTP paths.
-kubectl -n sector-sim patch ingress sector-sim-viz --type=json -p="[
+kubectl -n sector-sim patch ingress sector-sim-frontend --type=json -p="[
   {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"${DOMAIN}\"},
   {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"}
 ]"
@@ -204,13 +204,13 @@ kubectl -n sector-sim patch ingress sector-sim-api --type=json -p="[
 ]"
 
 # --- Guard: ensure ingress paths still exist (older scripts used merge patches that wiped rules) ---
-viz_paths="$(kubectl -n sector-sim get ingress sector-sim-viz -o jsonpath='{.spec.rules[0].http.paths[*].path}' || true)"
+frontend_paths="$(kubectl -n sector-sim get ingress sector-sim-frontend -o jsonpath='{.spec.rules[0].http.paths[*].path}' || true)"
 api_paths="$(kubectl -n sector-sim get ingress sector-sim-api -o jsonpath='{.spec.rules[0].http.paths[*].path}' || true)"
-if [ -z "$viz_paths" ] || [ -z "$api_paths" ]; then
+if [ -z "$frontend_paths" ] || [ -z "$api_paths" ]; then
   echo "Ingress paths missing; reapplying ingress manifests..." >&2
-  kubectl apply -f "$REPO_DIR/k8s/base/ingress-viz.yaml"
+  kubectl apply -f "$REPO_DIR/k8s/base/ingress-frontend.yaml"
   kubectl apply -f "$REPO_DIR/k8s/base/ingress-api.yaml"
-  kubectl -n sector-sim patch ingress sector-sim-viz --type=json -p="[
+  kubectl -n sector-sim patch ingress sector-sim-frontend --type=json -p="[
     {\"op\":\"replace\",\"path\":\"/spec/tls/0/hosts/0\",\"value\":\"${DOMAIN}\"},
     {\"op\":\"replace\",\"path\":\"/spec/rules/0/host\",\"value\":\"${DOMAIN}\"}
   ]"

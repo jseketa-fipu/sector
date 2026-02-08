@@ -65,7 +65,7 @@ class WorkerConfig(BaseSettings):
     )
     wait_for_frontend: bool = Field(default=False, alias="WAIT_FOR_FRONTEND")
     frontend_health_url: str = Field(
-        default="http://viz:9000/", alias="FRONTEND_HEALTH_URL"
+        default="http://frontend:9000/", alias="FRONTEND_HEALTH_URL"
     )
 
 
