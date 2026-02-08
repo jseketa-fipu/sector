@@ -8,7 +8,6 @@
     "faction_count": 5,
     "attempts_per_tick": 4,
     "tick_delay": 0.3,
-    "order_block_ms": 1,
     "minimum_launch_strength": 3.0,
     "damage_factor": 0.35,
     "frontline_origin_bonus": 0.6,
@@ -24,7 +23,6 @@
   "use_faction_count": true,
   "sector_seed": null,
   
-  "lease_ttl_ms": 60000,
   "world_tuning": {
     "rebellion_stability_threshold": 0.08,
     "rebellion_chance": 0.25,

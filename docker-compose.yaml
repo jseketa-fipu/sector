@@ -31,6 +31,8 @@ services:
       SNAPSHOT_KEY: sector:snapshot
       PYTHONPATH: /app
       RESET_UNIVERSE_ON_START: "true"
+      ORDER_BLOCK_MS: "1"
+      LEASE_TTL_MS: "60000"
     depends_on:
       - redis
 

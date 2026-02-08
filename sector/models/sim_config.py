@@ -48,7 +48,6 @@ class SimulationModifiers(BaseModel):
     faction_count: PositiveInt
     attempts_per_tick: PositiveInt
     tick_delay: PositiveFloat
-    order_block_ms: PositiveInt
     minimum_launch_strength: PositiveFloat
     damage_factor: PositiveFloat
     frontline_origin_bonus: PositiveFloat
@@ -88,8 +87,6 @@ class SimulationSettings(BaseModel):
     faction_name_list: Annotated[List[str], Field(default_factory=List)]
     use_faction_count: bool
     sector_seed: int | None
-
-    lease_ttl_ms: PositiveInt
 
     world_tuning: WorldTuning
     overextension_modifiers: OverextensionModifiers

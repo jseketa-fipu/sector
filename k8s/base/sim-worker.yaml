@@ -28,3 +28,7 @@ spec:
               value: /app
             - name: RESET_UNIVERSE_ON_START
               value: "true"
+            - name: ORDER_BLOCK_MS
+              value: "1"
+            - name: LEASE_TTL_MS
+              value: "60000"
