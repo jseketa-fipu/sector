@@ -291,3 +291,5 @@ flowchart LR
 ## Next steps
 
 - Add metrics/observability and resilience (backoff, retries).
+- Implement NFT minter fully (Blockchain applications), research soulbound NFTs, decide who pays for minting
+- Implement leaderboard to track wins/losses and if the human player controlled the faction (Blockchain applications)
