@@ -6,8 +6,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from sector.config import SIM_CONFIG
-from sector.factions import load_factions
+from sector.models import SIM_CONFIG
+from sector.helper.factions_helper import load_factions
 from sector.world import World, Order, FACTION_NAMES, TickSummary
 
 
@@ -40,42 +40,40 @@ class FactionGoal:
 
 
 # Global attempts per faction per tick (everyone same)
-ATTEMPTS_PER_TICK: int = int(SIM_CONFIG.get("attempts_per_tick", 4))
+ATTEMPTS_PER_TICK: int = SIM_CONFIG.simulation_modifiers.attempts_per_tick
 # How long without history events before bots get more aggressive
-STAGNATION_TICKS: int = int(SIM_CONFIG.get("stagnation_ticks", 400))
+STAGNATION_TICKS: int = SIM_CONFIG.simulation_modifiers.stagnation_ticks
 # Minimum idle strength before we bother launching an attack fleet
-MIN_LAUNCH_STRENGTH: float = float(SIM_CONFIG.get("min_launch_strength", 1.0))
+MIN_LAUNCH_STRENGTH: float = SIM_CONFIG.simulation_modifiers.minimum_launch_strength
 # Minimum strength needed to flip a neutral (kept in sync with world-side capture rules)
-MIN_CAPTURE_STRENGTH: float = float(SIM_CONFIG.get("min_capture_strength", 3.0))
+MIN_CAPTURE_STRENGTH: float = SIM_CONFIG.battle_modifiers.minimum_capture_strength
 # Overextension threshold (mirror world.py)
-OVEREXTENSION_THRESHOLD: int = int(SIM_CONFIG.get("overextension_threshold", 15))
+OVEREXTENSION_THRESHOLD: int = SIM_CONFIG.overextension_modifiers.threshold
 # Penalty for colonizer throughput/reserve per system beyond threshold
 COLONIZER_OVEREXT_ORDER_PENALTY: float = float(
-    SIM_CONFIG.get("colonizer_overextension_order_penalty", 0.1)
+    SIM_CONFIG.overextension_modifiers.colonizer_order_penalty_per_extra_system
 )
 COLONIZER_OVEREXT_RESERVE_PER_SYSTEM: float = float(
-    SIM_CONFIG.get("colonizer_overextension_reserve_per_system", 1.5)
+    SIM_CONFIG.overextension_modifiers.colonizer_reserve_per_system
 )
 # Bias toward using frontline systems as origins
-FRONTLINE_ORIGIN_BONUS: float = float(SIM_CONFIG.get("frontline_origin_bonus", 0.6))
+FRONTLINE_ORIGIN_BONUS: float = SIM_CONFIG.simulation_modifiers.frontline_origin_bonus
 # Extra weight for origins that sit on the path toward the current goal
-GOAL_PATH_BONUS: float = float(SIM_CONFIG.get("goal_path_bonus", 0.8))
+GOAL_PATH_BONUS: float = SIM_CONFIG.simulation_modifiers.goal_path_bonus
 # Max reachable hop distance for issuing an order (caps endless map crawls)
-MAX_REACH_HOPS: int = int(SIM_CONFIG.get("max_reach_hops", 8))
+MAX_REACH_HOPS: int = SIM_CONFIG.simulation_modifiers.max_reach_hops
 
 # Colonization tuning
-COLONIZER_RESERVE_STRENGTH: float = float(SIM_CONFIG.get("colonizer_reserve_strength", 6.0))
+COLONIZER_RESERVE_STRENGTH: float = SIM_CONFIG.colonizer_reserve_strength
 COLONIZER_STRENGTH_PER_ORDER: float = float(
-    SIM_CONFIG.get("colonizer_strength_per_order", max(3.0, MIN_CAPTURE_STRENGTH))
+    SIM_CONFIG.colonizer_strength_per_order
 )
 # Rally tuning: move strong backline stacks toward goals/frontlines
-RALLY_MIN_STRENGTH: float = float(
-    SIM_CONFIG.get("rally_min_strength", max(10.0, MIN_LAUNCH_STRENGTH * 2.0))
-)
-RALLY_MAX_ORDERS: int = int(SIM_CONFIG.get("rally_max_orders", 3))
+RALLY_MIN_STRENGTH: float = SIM_CONFIG.simulation_modifiers.rally_min_strength
+RALLY_MAX_ORDERS: int = SIM_CONFIG.simulation_modifiers.rally_max_orders
 
 # Max number of dynamically spawned rebel factions
-MAX_DYNAMIC_FACTIONS: int = int(SIM_CONFIG.get("max_dynamic_factions", 6))
+MAX_DYNAMIC_FACTIONS: int = SIM_CONFIG.simulation_modifiers.max_dynamic_factions
 
 # League (coalition of independent worlds)
 LEAGUE_FACTION_ID = "L"

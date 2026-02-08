@@ -1,0 +1,68 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build: .
+    command: ["bash", "-c", "python services/api/main.py"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      EVENT_STREAM: sector:events
+      ORDER_STREAM: sector:orders
+      SNAPSHOT_KEY: sector:snapshot
+      BOT_API_TOKEN: "0xDEADBEEF"
+      PYTHONPATH: /app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+
+  sim-worker:
+    build: .
+    command: ["bash", "-c", "python services/sim_worker/worker.py"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      EVENT_STREAM: sector:events
+      ORDER_STREAM: sector:orders
+      SNAPSHOT_KEY: sector:snapshot
+      PYTHONPATH: /app
+      RESET_UNIVERSE_ON_START: "true"
+      ORDER_BLOCK_MS: "1"
+      LEASE_TTL_MS: "60000"
+    depends_on:
+      - redis
+
+  bot-worker:
+    build: .
+    command: ["bash", "-c", "python services/bot_worker/puppetmaster.py"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      EVENT_STREAM: sector:events
+      ORDER_STREAM: sector:orders
+      SNAPSHOT_KEY: sector:snapshot
+      PYTHONPATH: /app
+      BOT_API_TOKEN: "0xDEADBEEF"
+      BOT_API_URL: http://api:8000
+    depends_on:
+      - redis
+      - api
+
+  viz:
+    build: .
+    command: ["bash", "-c", "python services/viz_worker/main.py"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      EVENT_STREAM: sector:events
+      ORDER_STREAM: sector:orders
+      SNAPSHOT_KEY: sector:snapshot
+      API_URL: http://api:8000
+      PORT: "9000"
+      PYTHONPATH: /app
+    ports:
+      - "9000:9000"
+    depends_on:
+      - redis

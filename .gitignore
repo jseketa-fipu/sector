@@ -2,3 +2,4 @@ __pycache__
 scripts/redeploy.sh
 scripts/redeploy.ps1
 chat-log.md
+.vscode

@@ -5,10 +5,6 @@ Visualization service serving the frontend and streaming snapshots/events.
 - Serves the static index.html bundled with this service.
 - Proxies the Redis-backed snapshot and events (WebSocket) for the UI.
 """
-from __future__ import annotations
-
-import os
-from dataclasses import dataclass
 from pathlib import Path
 
 import uvicorn
@@ -17,37 +13,24 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 import urllib.request
 import urllib.parse
 
-from sector.config import SIM_CONFIG
+from sector.models import SIM_CONFIG
+from sector.models import VisualizationWorkerSettings
+
 from sector.infra.redis_streams import RedisStreams
-from sector.state_utils import snapshot_from_world
+from sector.state_utils import snapshot_from_world  # type: ignore
 from sector.world import create_sector
 
 
-@dataclass(frozen=True)
-class VizConfig:
-    redis_url: str | None
-    api_url: str
-    port: int
-
-
-def _load_config() -> VizConfig:
-    return VizConfig(
-        redis_url=os.environ.get("REDIS_URL"),
-        api_url=os.environ.get("API_URL", "http://api:8000"),
-        port=int(os.environ.get("PORT", "9000")),
-    )
-
-
-_CONFIG = _load_config()
+config = VisualizationWorkerSettings()  # type: ignore[call-arg]
 
 BASE_DIR = Path(__file__).resolve().parent / "static"
 INDEX_PATH = BASE_DIR / "index.html"
 TAIL_COUNT_DEFAULT = 50
-DEFAULT_TICK_DELAY = float(SIM_CONFIG.get("tick_delay", 0.5))
+DEFAULT_TICK_DELAY = float(SIM_CONFIG.simulation_modifiers.tick_delay)
 
-streams = RedisStreams(url=_CONFIG.redis_url)
+streams = RedisStreams(url=config.redis_url)
 app = FastAPI(title="Sector Viz", version="0.1.0")
-API_URL = _CONFIG.api_url
+API_URL = str(config.api_url)
 
 
 @app.get("/")
@@ -75,7 +58,9 @@ async def preview(seed: str):
     Generate a deterministic preview of the sector without touching the live sim.
     """
     world = create_sector(seed=seed)
-    snap = snapshot_from_world(world, tick_delay=DEFAULT_TICK_DELAY, include_ai_state=False)
+    snap = snapshot_from_world(
+        world, tick_delay=DEFAULT_TICK_DELAY, include_ai_state=False
+    )
     return snap
 
 
@@ -100,12 +85,16 @@ async def proxy_api(path: str, request: Request):
     if request.method == "OPTIONS":
         return Response(status_code=204)
 
-    req = urllib.request.Request(url, data=body or None, headers=headers, method=request.method)
+    req = urllib.request.Request(
+        url, data=body or None, headers=headers, method=request.method
+    )
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
             payload = resp.read()
             content_type = resp.headers.get("Content-Type", "application/json")
-            return Response(content=payload, status_code=resp.status, media_type=content_type)
+            return Response(
+                content=payload, status_code=resp.status, media_type=content_type
+            )
     except urllib.error.HTTPError as exc:
         payload = exc.read()
         content_type = exc.headers.get("Content-Type", "application/json")
@@ -121,7 +110,9 @@ async def ws(ws: WebSocket):
     last_id = "$"
     try:
         while True:
-            entries = await streams.read_events(last_id=last_id, count=200, block_ms=500)
+            entries = await streams.read_events(
+                last_id=last_id, count=200, block_ms=500
+            )
             if not entries:
                 # If no new events, send a keepalive snapshot to keep UI in sync.
                 snap = await streams.load_snapshot()
@@ -139,6 +130,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "services.viz_worker.main:app",
         host="0.0.0.0",
-        port=_CONFIG.port,
+        port=config.port,
         reload=False,
     )

@@ -20,9 +20,10 @@ spec:
           image: distributed-app:latest
           imagePullPolicy: IfNotPresent
           command: ["bash", "-c", "python services/bot_worker/puppetmaster.py"]
+          envFrom:
+            - configMapRef:
+                name: redis-config
           env:
-            - name: REDIS_URL
-              value: redis://redis.sector-sim.svc.cluster.local:6379/0
             - name: PYTHONPATH
               value: /app
             - name: BOT_API_URL

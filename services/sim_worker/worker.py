@@ -17,75 +17,61 @@ from collections import deque
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
 
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from sector.puppet import reset_factions
-from sector.config import SIM_CONFIG
+from sector.models import SIM_CONFIG
 from sector.infra.redis_streams import RedisStreams
 from sector.state_utils import snapshot_from_world
 from sector.world import Fleet, Order, World, advance_world, create_sector, FACTION_NAMES
 
 
-@dataclass(frozen=True)
-class WorkerConfig:
-    event_maxlen: int
-    snapshot_every: int
-    order_block_ms: int
-    lease_key: str
-    lease_ttl_ms: int
-    session_key_prefix: str
-    address_session_prefix: str
-    player_faction_prefix: str
-    faction_player_prefix: str
-    worker_id: str
-    universe_key: str
-    human_factions_key: str
-    restart_key: str
-    reset_universe_on_start: bool
-    order_group: str
-    order_consumer: str
-    wait_for_frontend: bool
-    frontend_health_url: str
+class WorkerConfig(BaseSettings):
+    model_config = SettingsConfigDict(case_sensitive=False)
 
-
-def _load_config() -> WorkerConfig:
-    return WorkerConfig(
-        event_maxlen=int(os.environ.get("EVENT_STREAM_MAXLEN", 5000)),
-        snapshot_every=int(os.environ.get("SNAPSHOT_EVERY", 1)),
-        order_block_ms=int(
-            os.environ.get("ORDER_BLOCK_MS", SIM_CONFIG.get("order_block_ms", 1))
-        ),
-        lease_key=os.environ.get("LEASE_KEY", "sector:lease"),
-        lease_ttl_ms=int(
-            os.environ.get("LEASE_TTL_MS", SIM_CONFIG.get("lease_ttl_ms", 5000))
-        ),
-        session_key_prefix=os.environ.get("SESSION_KEY_PREFIX", "sector:session"),
-        address_session_prefix=os.environ.get(
-            "ADDRESS_SESSION_PREFIX", "sector:session:addr"
-        ),
-        player_faction_prefix=os.environ.get(
-            "PLAYER_FACTION_PREFIX", "sector:player:faction"
-        ),
-        faction_player_prefix=os.environ.get(
-            "FACTION_PLAYER_PREFIX", "sector:faction:player"
-        ),
-        worker_id=os.environ.get("WORKER_ID", socket.gethostname()),
-        universe_key=os.environ.get("UNIVERSE_KEY", "sector:universe_id"),
-        human_factions_key=os.environ.get("HUMAN_FACTIONS_KEY", "sector:human_factions"),
-        restart_key=os.environ.get("RESTART_KEY", "sector:restart"),
-        reset_universe_on_start=os.environ.get("RESET_UNIVERSE_ON_START", "true")
-        .lower()
-        == "true",
-        order_group=os.environ.get("ORDER_GROUP", "sim"),
-        order_consumer=os.environ.get("ORDER_CONSUMER", f"sim-{os.getpid()}"),
-        wait_for_frontend=os.environ.get("WAIT_FOR_FRONTEND", "").lower() == "true",
-        frontend_health_url=os.environ.get(
-            "FRONTEND_HEALTH_URL", "http://viz:9000/"
-        ),
+    event_maxlen: int = Field(default=5000, alias="EVENT_STREAM_MAXLEN")
+    snapshot_every: int = Field(default=1, alias="SNAPSHOT_EVERY")
+    order_block_ms: int = Field(default=1, alias="ORDER_BLOCK_MS")
+    lease_key: str = Field(default="sector:lease", alias="LEASE_KEY")
+    lease_ttl_ms: int = Field(default=60000, alias="LEASE_TTL_MS")
+    session_key_prefix: str = Field(default="sector:session", alias="SESSION_KEY_PREFIX")
+    address_session_prefix: str = Field(
+        default="sector:session:addr", alias="ADDRESS_SESSION_PREFIX"
+    )
+    player_faction_prefix: str = Field(
+        default="sector:player:faction", alias="PLAYER_FACTION_PREFIX"
+    )
+    faction_player_prefix: str = Field(
+        default="sector:faction:player", alias="FACTION_PLAYER_PREFIX"
+    )
+    worker_id: str = Field(
+        default_factory=socket.gethostname, alias="WORKER_ID"
+    )
+    universe_key: str = Field(default="sector:universe_id", alias="UNIVERSE_KEY")
+    human_factions_key: str = Field(
+        default="sector:human_factions", alias="HUMAN_FACTIONS_KEY"
+    )
+    restart_key: str = Field(default="sector:restart", alias="RESTART_KEY")
+    bots_only_key: str = Field(default="sector:bots_only", alias="BOTS_ONLY_KEY")
+    pause_key: str = Field(default="sector:pause", alias="PAUSE_KEY")
+    reset_universe_on_start: bool = Field(
+        default=True, alias="RESET_UNIVERSE_ON_START"
+    )
+    order_group: str = Field(default="sim", alias="ORDER_GROUP")
+    order_consumer: str = Field(
+        default_factory=lambda: f"sim-{os.getpid()}",
+        alias="ORDER_CONSUMER",
+    )
+    wait_for_frontend: bool = Field(default=False, alias="WAIT_FOR_FRONTEND")
+    frontend_health_url: str = Field(
+        default="http://viz:9000/", alias="FRONTEND_HEALTH_URL"
     )
 
 
-_CONFIG = _load_config()
+_CONFIG = WorkerConfig()
 
-TICK_DELAY: float = float(SIM_CONFIG.get("tick_delay", 0.5))
+TICK_DELAY: float = SIM_CONFIG.simulation_modifiers.tick_delay
 
 
 @dataclass
@@ -281,6 +267,16 @@ class SimulationWorker:
             f"{_CONFIG.human_factions_key}:{universe_id}"
         )
         return set(factions or [])
+
+    async def _bots_only_enabled(self) -> bool:
+        universe_id = await self._ensure_universe_id()
+        key = f"{_CONFIG.bots_only_key}:{universe_id}"
+        return bool(await self.streams.client.get(key))
+
+    async def _paused(self) -> bool:
+        universe_id = await self._ensure_universe_id()
+        key = f"{_CONFIG.pause_key}:{universe_id}"
+        return bool(await self.streams.client.get(key))
 
     async def _ensure_initial_snapshot(self) -> None:
         if self._last_frame is not None:
@@ -591,8 +587,13 @@ class SimulationWorker:
                     await asyncio.sleep(0.5)
                     continue
 
+                if await self._paused():
+                    await asyncio.sleep(max(0.25, TICK_DELAY))
+                    continue
+
                 human_factions = await self._get_human_factions()
-                if not human_factions and self.world.tick == 0:
+                bots_only = await self._bots_only_enabled()
+                if not human_factions and self.world.tick == 0 and not bots_only:
                     await self._ensure_initial_snapshot()
                     await asyncio.sleep(1)
                     continue

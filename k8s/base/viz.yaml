@@ -18,9 +18,14 @@ spec:
           image: distributed-app:latest
           imagePullPolicy: IfNotPresent
           command: ["bash", "-c", "python services/viz_worker/main.py"]
+          envFrom:
+            - configMapRef:
+                name: redis-config
           env:
-            - name: REDIS_URL
-              value: redis://redis.sector-sim.svc.cluster.local:6379/0
+            - name: API_URL
+              value: http://api:8000
+            - name: PORT
+              value: "9000"
             - name: PYTHONPATH
               value: /app
           ports:

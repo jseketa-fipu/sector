@@ -20,10 +20,15 @@ spec:
           image: distributed-app:latest
           imagePullPolicy: IfNotPresent
           command: ["bash", "-c", "python services/sim_worker/worker.py"]
+          envFrom:
+            - configMapRef:
+                name: redis-config
           env:
-            - name: REDIS_URL
-              value: redis://redis.sector-sim.svc.cluster.local:6379/0
             - name: PYTHONPATH
               value: /app
             - name: RESET_UNIVERSE_ON_START
               value: "true"
+            - name: ORDER_BLOCK_MS
+              value: "1"
+            - name: LEASE_TTL_MS
+              value: "60000"
