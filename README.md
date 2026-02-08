@@ -5,7 +5,7 @@ A playable, Warhammer 40k–inspired sector simulation with real-time updates an
 - Simulation worker (advances the world and emits snapshots/events)
 - Frontend worker (serves the UI and streams updates over WebSocket)
 - Bot worker (AI orders for unclaimed factions)
-- NFT minter (standalone HTTP service for minting awards)
+- NFT minter (standalone HTTP service for minting awards) - to be implemented (only skeleton API available)
 
 All long-lived state lives in Redis (streams + snapshot hash).
 
