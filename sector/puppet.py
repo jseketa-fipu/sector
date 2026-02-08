@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from sector.models import SIM_CONFIG
-from sector.factions import load_factions
+from sector.helper.factions_helper import load_factions
 from sector.world import World, Order, FACTION_NAMES, TickSummary
 
 

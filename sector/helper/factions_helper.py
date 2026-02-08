@@ -2,16 +2,16 @@
 from __future__ import annotations
 
 from itertools import cycle
-from typing import Dict
+from typing import Any
 
 from sector.models.sim_config import SimulationSettings, FactionConfig
 
 
-def _dump_faction(cfg: FactionConfig) -> dict:
+def _dump_faction(cfg: FactionConfig) -> dict[str, Any]:
     return cfg.model_dump()
 
 
-def load_factions(sim_cfg: SimulationSettings) -> Dict[str, dict]:
+def load_factions(sim_cfg: SimulationSettings) -> dict[str, dict[str, Any]]:
     """
     Build the faction configuration from the validated SimulationSettings model.
     Priority:
@@ -21,7 +21,10 @@ def load_factions(sim_cfg: SimulationSettings) -> Dict[str, dict]:
     """
     explicit = sim_cfg.factions
     if explicit and not sim_cfg.use_faction_count:
-        return {fid: _dump_faction(cfg) for fid, cfg in explicit.items()}
+        return_faction_dictionary = {
+            faction_id: _dump_faction(config) for faction_id, config in explicit.items()
+        }
+        return return_faction_dictionary
 
     count = sim_cfg.simulation_modifiers.faction_count
     names = list(sim_cfg.faction_name_list)
@@ -35,10 +38,17 @@ def load_factions(sim_cfg: SimulationSettings) -> Dict[str, dict]:
         )
 
     templates = cycle(explicit.values())
-    factions: Dict[str, dict] = {}
+    factions: dict[str, dict[str, Any]] = {}
     for idx in range(count):
-        fid = f"F{idx + 1}"
-        cfg = _dump_faction(next(templates))
-        cfg["name"] = names[idx]
-        factions[fid] = cfg
+        faction_index = idx + 1
+        faction_id = f"F{faction_index}"
+
+        template = next(templates)
+        config = _dump_faction(template)
+
+        name = names[idx]
+        config["name"] = name
+
+        factions[faction_id] = config
+
     return factions
