@@ -114,6 +114,65 @@ NFT minter (separate service, default `http://localhost:9100`):
 - `GET /health`
 - `POST /mint` (optional `Authorization: Bearer <MINTER_API_KEY>`)
 
+## Architecture diagram (human player timeline)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Player
+  participant Viz as Web Viz
+  participant API as API Service
+  participant Redis as Redis
+  participant Sim as Sim Worker
+  participant Bot as Bot Worker
+
+  Player->>Viz: Open UI
+  Viz->>API: GET /snapshot
+  API->>Redis: Load snapshot
+  Redis-->>API: Snapshot
+  API-->>Viz: Snapshot
+  Viz-->>Player: Render world
+
+  Player->>Viz: Connect live updates
+  Viz->>API: WebSocket /ws (via viz worker proxy)
+  API->>Redis: Stream events
+  Redis-->>API: Events
+  API-->>Viz: Events
+  Viz-->>Player: Live updates
+
+  Player->>Viz: Request login
+  Viz->>API: POST /auth/nonce
+  API-->>Viz: Nonce + message
+  Player->>Viz: Sign message
+  Viz->>API: POST /auth/verify (signature)
+  API-->>Viz: JWT
+
+  Player->>Viz: Claim faction
+  Viz->>API: POST /factions/claim (Bearer JWT)
+  API->>Redis: Record faction claim
+  API-->>Viz: Claim result
+
+  Player->>Viz: Issue order(s)
+  Viz->>API: POST /orders (Bearer JWT)
+  API->>Redis: Append to order stream
+
+  alt Unclaimed factions exist
+    Bot->>Redis: Load snapshot
+    Bot->>Bot: Generate AI orders
+    Bot->>API: POST /orders (X-Bot-Token)
+    API->>Redis: Append to order stream
+  else All factions claimed by humans
+    Bot-->>Bot: No orders this tick
+  end
+
+  Sim->>Redis: Read orders
+  Sim->>Sim: Apply orders, advance tick
+  Sim->>Redis: Save snapshot + append events
+  API->>Redis: Read events/snapshot
+  API-->>Viz: Events / snapshot
+  Viz-->>Player: World updates
+```
+
 ## Architecture diagram
 
 ```mermaid
