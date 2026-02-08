@@ -6,58 +6,50 @@ and submits them through the /orders API endpoint.
 from __future__ import annotations
 
 import json
-import os
 import time
 import urllib.request
-from dataclasses import dataclass
 from typing import List, Optional, Set
 
 import redis
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from sector.puppet import generate_orders_from_snapshot
 from sector.models.redis_config import REDIS_SETTINGS
 
 
-@dataclass(frozen=True)
-class BotConfig:
-    redis_url: str
-    snapshot_key: str
-    event_stream: str
-    universe_key: str
-    human_factions_key: str
-    faction_player_prefix: str
-    bot_api_url: str
-    bot_api_token: str
-    poll_interval: float
-    max_orders_per_tick: int
-    event_block_ms: int
-    api_service_host: str | None
-    api_service_port: str | None
+class BotConfig(BaseSettings):
+    model_config = SettingsConfigDict(case_sensitive=False)
 
-
-def _load_config() -> BotConfig:
-    return BotConfig(
-        redis_url=str(REDIS_SETTINGS.redis_url),
-        snapshot_key=REDIS_SETTINGS.snapshot_key,
-        event_stream=REDIS_SETTINGS.event_stream,
-        universe_key=os.environ.get("UNIVERSE_KEY", "sector:universe_id"),
-        human_factions_key=os.environ.get(
-            "HUMAN_FACTIONS_KEY", "sector:human_factions"
-        ),
-        faction_player_prefix=os.environ.get(
-            "FACTION_PLAYER_PREFIX", "sector:faction:player"
-        ),
-        bot_api_url=os.environ.get("BOT_API_URL", "").rstrip("/"),
-        bot_api_token=os.environ.get("BOT_API_TOKEN", ""),
-        poll_interval=float(os.environ.get("BOT_POLL_INTERVAL", "1.0")),
-        max_orders_per_tick=int(os.environ.get("BOT_MAX_ORDERS", "200")),
-        event_block_ms=int(os.environ.get("BOT_EVENT_BLOCK_MS", "1000")),
-        api_service_host=os.environ.get("API_SERVICE_HOST"),
-        api_service_port=os.environ.get("API_SERVICE_PORT"),
+    redis_url: str = Field(
+        default_factory=lambda: str(REDIS_SETTINGS.redis_url),
+        alias="REDIS_URL",
     )
+    snapshot_key: str = Field(
+        default_factory=lambda: REDIS_SETTINGS.snapshot_key,
+        alias="SNAPSHOT_KEY",
+    )
+    event_stream: str = Field(
+        default_factory=lambda: REDIS_SETTINGS.event_stream,
+        alias="EVENT_STREAM",
+    )
+    universe_key: str = Field(default="sector:universe_id", alias="UNIVERSE_KEY")
+    human_factions_key: str = Field(
+        default="sector:human_factions", alias="HUMAN_FACTIONS_KEY"
+    )
+    faction_player_prefix: str = Field(
+        default="sector:faction:player", alias="FACTION_PLAYER_PREFIX"
+    )
+    bot_api_url: str = Field(default="", alias="BOT_API_URL")
+    bot_api_token: str = Field(default="", alias="BOT_API_TOKEN")
+    poll_interval: float = Field(default=1.0, alias="BOT_POLL_INTERVAL")
+    max_orders_per_tick: int = Field(default=200, alias="BOT_MAX_ORDERS")
+    event_block_ms: int = Field(default=1000, alias="BOT_EVENT_BLOCK_MS")
+    api_service_host: str | None = Field(default=None, alias="API_SERVICE_HOST")
+    api_service_port: str | None = Field(default=None, alias="API_SERVICE_PORT")
 
 
-_CONFIG = _load_config()
+_CONFIG = BotConfig()
 _ACTIVE_API_URL: str | None = None
 
 
@@ -109,7 +101,7 @@ def _get_claimed_factions(
 def _api_candidates() -> List[str]:
     candidates: List[str] = []
     if _CONFIG.bot_api_url:
-        candidates.append(_CONFIG.bot_api_url)
+        candidates.append(_CONFIG.bot_api_url.rstrip("/"))
     if _CONFIG.api_service_host and _CONFIG.api_service_port:
         candidates.append(
             f"http://{_CONFIG.api_service_host}:{_CONFIG.api_service_port}"

@@ -1,9 +1,7 @@
 import json
-import os
 import secrets
 import time
 import uuid
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, TypedDict
 
 import jwt
@@ -14,63 +12,45 @@ from eth_account.messages import encode_defunct
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from sector.infra.redis_streams import RedisStreams
 from sector.world import FACTION_NAMES
 
 
-@dataclass(frozen=True)
-class ApiConfig:
-    redis_url: str | None
-    cors_allow_origins: str
-    jwt_secret: str
-    jwt_ttl_seconds: int
-    bot_api_token: str
-    nonce_ttl_seconds: int
-    session_key_prefix: str
-    address_session_prefix: str
-    nonce_key_prefix: str
-    universe_key: str
-    human_factions_key: str
-    player_faction_prefix: str
-    faction_player_prefix: str
-    restart_key: str
-    bots_only_key: str
-    pause_key: str
-    port: int
+class ApiConfig(BaseSettings):
+    model_config = SettingsConfigDict(case_sensitive=False)
 
-
-def _load_config() -> ApiConfig:
-    return ApiConfig(
-        redis_url=os.environ.get("REDIS_URL"),
-        cors_allow_origins=os.environ.get("CORS_ALLOW_ORIGINS", "*"),
-        jwt_secret=os.environ.get("JWT_SECRET", "dev-secret"),
-        jwt_ttl_seconds=int(os.environ.get("JWT_TTL_SECONDS", "86400")),
-        bot_api_token=os.environ.get("BOT_API_TOKEN", ""),
-        nonce_ttl_seconds=int(os.environ.get("AUTH_NONCE_TTL_SECONDS", "300")),
-        session_key_prefix=os.environ.get("SESSION_KEY_PREFIX", "sector:session"),
-        address_session_prefix=os.environ.get(
-            "ADDRESS_SESSION_PREFIX", "sector:session:addr"
-        ),
-        nonce_key_prefix=os.environ.get("NONCE_KEY_PREFIX", "sector:auth:nonce"),
-        universe_key=os.environ.get("UNIVERSE_KEY", "sector:universe_id"),
-        human_factions_key=os.environ.get(
-            "HUMAN_FACTIONS_KEY", "sector:human_factions"
-        ),
-        player_faction_prefix=os.environ.get(
-            "PLAYER_FACTION_PREFIX", "sector:player:faction"
-        ),
-        faction_player_prefix=os.environ.get(
-            "FACTION_PLAYER_PREFIX", "sector:faction:player"
-        ),
-        restart_key=os.environ.get("RESTART_KEY", "sector:restart"),
-        bots_only_key=os.environ.get("BOTS_ONLY_KEY", "sector:bots_only"),
-        pause_key=os.environ.get("PAUSE_KEY", "sector:pause"),
-        port=int(os.environ.get("PORT", "8000")),
+    redis_url: str | None = Field(default=None, alias="REDIS_URL")
+    cors_allow_origins: str = Field(default="*", alias="CORS_ALLOW_ORIGINS")
+    jwt_secret: str = Field(default="dev-secret", alias="JWT_SECRET")
+    jwt_ttl_seconds: int = Field(default=86400, alias="JWT_TTL_SECONDS")
+    bot_api_token: str = Field(default="", alias="BOT_API_TOKEN")
+    nonce_ttl_seconds: int = Field(default=300, alias="AUTH_NONCE_TTL_SECONDS")
+    session_key_prefix: str = Field(default="sector:session", alias="SESSION_KEY_PREFIX")
+    address_session_prefix: str = Field(
+        default="sector:session:addr", alias="ADDRESS_SESSION_PREFIX"
     )
+    nonce_key_prefix: str = Field(
+        default="sector:auth:nonce", alias="NONCE_KEY_PREFIX"
+    )
+    universe_key: str = Field(default="sector:universe_id", alias="UNIVERSE_KEY")
+    human_factions_key: str = Field(
+        default="sector:human_factions", alias="HUMAN_FACTIONS_KEY"
+    )
+    player_faction_prefix: str = Field(
+        default="sector:player:faction", alias="PLAYER_FACTION_PREFIX"
+    )
+    faction_player_prefix: str = Field(
+        default="sector:faction:player", alias="FACTION_PLAYER_PREFIX"
+    )
+    restart_key: str = Field(default="sector:restart", alias="RESTART_KEY")
+    bots_only_key: str = Field(default="sector:bots_only", alias="BOTS_ONLY_KEY")
+    pause_key: str = Field(default="sector:pause", alias="PAUSE_KEY")
+    port: int = Field(default=8000, alias="PORT")
 
 
-_CONFIG = _load_config()
+_CONFIG = ApiConfig()
 
 # Redis streams helper (async). We reuse the sector-backend stream/key defaults.
 streams = RedisStreams(url=_CONFIG.redis_url)
