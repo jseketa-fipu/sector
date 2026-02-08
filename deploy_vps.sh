@@ -135,9 +135,15 @@ kubectl -n kube-system delete deploy traefik >/dev/null 2>&1 || true
 
 # --- Build the app image locally and load into k3s containerd ---
 # Build locally and load into k3s containerd to avoid external registries.
-docker build -t "$IMAGE" "$REPO_DIR"
+# Ensure we don't reuse a stale image layer.
+if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  docker rmi -f "$IMAGE" >/dev/null 2>&1 || true
+fi
+docker build --no-cache -t "$IMAGE" "$REPO_DIR"
 tmp_image_tar="$(mktemp)"
 docker save -o "$tmp_image_tar" "$IMAGE"
+# Remove any existing k3s image with the same tag to avoid stale layers.
+k3s ctr images rm "$IMAGE" >/dev/null 2>&1 || true
 k3s ctr images import "$tmp_image_tar"
 rm -f "$tmp_image_tar"
 
